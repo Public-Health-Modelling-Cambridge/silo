@@ -152,6 +152,7 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
     public void updateHealthDiseaseStates(int year) {
         for(Person person : dataContainer.getHouseholdDataManager().getPersons()) {
             PersonHealth personHealth = (PersonHealth) person;
+
             List<String> newDisease = new ArrayList<>();
 
             for(Diseases diseases : Diseases.values()){
@@ -172,15 +173,26 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                 }
             }
 
+
+
             //update Disease track map
-            if(newDisease.isEmpty()){
-                //for base year, year-1 is the initial state "healthy"
-                personHealth.getHealthDiseaseTracker().put(year, personHealth.getHealthDiseaseTracker().get(year-1));
-            }else {
-                List<String> fullDisease = new ArrayList<>(personHealth.getHealthDiseaseTracker().get(year-1));
-                fullDisease.addAll(newDisease);
-                fullDisease.remove("healthy");
-                personHealth.getHealthDiseaseTracker().put(year, fullDisease);
+                if(newDisease.isEmpty()){
+                        // Account for newborns whose previous states are null, set their existing state as `healthy`
+                        if (personHealth.getHealthDiseaseTracker().get(year - 1) == null){
+                            personHealth.getHealthDiseaseTracker().put(year, Arrays.asList("healthy"));
+                        }else{
+                            //for base year, year-1 is the initial state "healthy"
+                            personHealth.getHealthDiseaseTracker().put(year, personHealth.getHealthDiseaseTracker().get(year - 1));
+                        }
+
+                }else {
+
+                        List<String> fullDisease = new ArrayList<>(personHealth.getHealthDiseaseTracker().get(year - 1));
+                        fullDisease.addAll(newDisease);
+                        fullDisease.remove("healthy");
+                        personHealth.getHealthDiseaseTracker().put(year, fullDisease);
+
+
             }
         }
     }
