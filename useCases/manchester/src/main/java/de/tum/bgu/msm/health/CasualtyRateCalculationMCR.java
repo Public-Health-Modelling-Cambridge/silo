@@ -41,7 +41,7 @@ public class CasualtyRateCalculationMCR {
 
         for (OsmLink osmLink : osmLinkDataset) {
             computeLinkCasualtyFrequency(osmLink);
-            assignRiskToLinks(osmLink);
+            //assignRiskToLinks(osmLink);
             assignCasualtyBinaryToLinks(osmLink);
         }
     }
@@ -81,9 +81,12 @@ public class CasualtyRateCalculationMCR {
 
         // create a hash map storing the probCrash per osmID, mode, hour
 
+        /*
         accidentsContext.getOsmId2info().get(osmLink.getOsmId())
                 .getSevereFatalCasualityExposureByAccidentTypeByTime()
                 .put(accidentType, hourlyCasualtyRate);
+
+         */
     }
 
     private double getProbabilityCrashBinaryLogit(OsmLink osmLink, int hour) {
@@ -128,6 +131,7 @@ public class CasualtyRateCalculationMCR {
         return Math.exp(utility) / (1.0 + Math.exp(utility));
     }
 
+    /*
     private void assignRiskToLinks(OsmLink osmLink) {
         Set<Link> links = osmLink.getNetworkLinks();
         OpenIntFloatHashMap osmRisk = accidentsContext.getOsmId2info().get(osmLink.getOsmId())
@@ -150,6 +154,8 @@ public class CasualtyRateCalculationMCR {
         }
     }
 
+     */
+
     private void assignCasualtyBinaryToLinks(OsmLink osmLink) {
         Set<Link> links = osmLink.getNetworkLinks();
         for (Link link : links) {
@@ -163,9 +169,12 @@ public class CasualtyRateCalculationMCR {
                 binaryCasualties.put(hour, random.nextDouble() < riskValue ? 1 : 0);
             }
 
+            /*
             accidentsContext.getLinkId2info().get(link.getId())
                     .getSevereFatalCasualityBinaryByAccidentTypeByTime()
                     .put(accidentType, binaryCasualties);
+
+             */
         }
     }
 
