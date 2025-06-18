@@ -107,5 +107,8 @@ public class OsmLink {
         return attr instanceof String ? (String) attr : defaultVal;
     }
 
-    //public Set<Link> getNetworkLinks() {}
+    public Set<Link> getNetworkLinks() {
+        Set<Link> links = networkLinks;
+        return links;
+    }
 }
