@@ -58,13 +58,7 @@ public class CasualtyRateCalculationMCR {
             List<Link> groupLinks = entry.getValue();
             if (groupLinks.isEmpty()) continue;
 
-            Link first = groupLinks.get(0);
-            String roadType = getStringAttribute(first.getAttributes(), "type", "residential");
-            String highway = getStringAttribute(first.getAttributes(), "highway", "unclassified");
-            String onwysmm = getStringAttribute(first.getAttributes(), "onwysmm", "Two Way");
-            double speedLimit = getDoubleAttribute(first.getAttributes(), "speedLimitMPH", 0.0);
-
-            OsmLink osmLink = new OsmLink(osmId, roadType, highway, onwysmm, speedLimit, new HashSet<>(groupLinks));
+            OsmLink osmLink = new OsmLink(osmId, new HashSet<>(groupLinks));
             osmLinkDataset.add(osmLink);
         }
     }
@@ -92,6 +86,8 @@ public class CasualtyRateCalculationMCR {
     private double getProbabilityCrashBinaryLogit(OsmLink osmLink, int hour) {
         Set<Link> links = osmLink.getNetworkLinks();
         double utility = binaryLogitCoef.getOrDefault("(Intercept)", 0.0);
+
+        // add traffic demans to the OsmLink.java
 
         double truckHourlyDemand = links.stream().mapToDouble(l -> analzyer.getDemand(l.getId(), "truck", hour)).average().orElse(0.0) * SCALEFACTOR;
         double pedHourlyDemand = links.stream().mapToDouble(l -> analzyer.getDemand(l.getId(), "walk", hour)).average().orElse(0.0);
@@ -131,10 +127,10 @@ public class CasualtyRateCalculationMCR {
         return Math.exp(utility) / (1.0 + Math.exp(utility));
     }
 
-    /*
+    
     private void assignRiskToLinks(OsmLink osmLink) {
         Set<Link> links = osmLink.getNetworkLinks();
-        OpenIntFloatHashMap osmRisk = accidentsContext.getOsmId2info().get(osmLink.getOsmId())
+        OpenIntFloatHashMap osmRisk = accidentsContext.getOsmId2info().get(osmLink.getOsmId()) // create an object of network links and assign osm risk 
                 .getSevereFatalCasualityExposureByAccidentTypeByTime()
                 .get(accidentType);
 
@@ -146,7 +142,7 @@ public class CasualtyRateCalculationMCR {
             for (int hour = 0; hour < 24; hour++) {
                 float osmRate = osmRisk.get(hour);
                 float linkRisk = (float) (osmRate * (linkLength / totalLength));
-                weightedRisk.put(hour, linkRisk);
+                weightedRisk.put(hour, linkRisk); // not stored atm
             }
             accidentsContext.getLinkId2info().get(link.getId())
                     .getSevereFatalCasualityExposureByAccidentTypeByTime()
