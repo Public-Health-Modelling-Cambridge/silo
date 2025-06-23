@@ -27,17 +27,21 @@ public class OsmLink {
 
     public Set<Link> networkLinks;
 
-    public OsmLink(int osmId, String roadType, String highway, String onwysmm, double speedLimitMPH, Set<Link> links) {
+    public OsmLink(int osmId, Set<Link> links) {
         this.osmId = osmId;
-        this.highway = highway;
-        this.onwysmm = onwysmm;
-        this.speedLimitMPH = speedLimitMPH;
         this.networkLinks = links;
 
         computeAttributes();
     }
 
     private void computeAttributes() {
+
+        Link first = networkLinks.get(0);
+
+        this.roadType = getStringAttribute(first.getAttributes(), "type", "residential");
+        this.highway = getStringAttribute(first.getAttributes(), "highway", "unclassified");
+        this.onwysmm = getStringAttribute(first.getAttributes(), "onwysmm", "Two Way");
+        this.speedLimit = getDoubleAttribute(first.getAttributes(), "speedLimitMPH", 0.0);
 
         int bikeAllowedInt = networkLinks.stream()
                 .mapToInt(link -> link.getAllowedModes().contains("bike") ? 1 : 0)
@@ -112,3 +116,4 @@ public class OsmLink {
         return links;
     }
 }
+
