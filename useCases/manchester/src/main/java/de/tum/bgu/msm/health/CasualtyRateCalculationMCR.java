@@ -64,7 +64,7 @@ public class CasualtyRateCalculationMCR {
     }
 
     private void computeLinkCasualtyFrequency(OsmLink osmLink) {
-        Set<Link> links = osmLink.getNetworkLinks();
+        Set<Link> links = OsmLink.getNetworkLinks();
         OpenIntFloatHashMap hourlyCasualtyRate = new OpenIntFloatHashMap();
 
         for (int hour = 0; hour < 24; hour++) {
@@ -84,8 +84,10 @@ public class CasualtyRateCalculationMCR {
     }
 
     private double getProbabilityCrashBinaryLogit(OsmLink osmLink, int hour) {
-        Set<Link> links = osmLink.getNetworkLinks();
+        Set<Link> links = OsmLink.getNetworkLinks();
         double utility = binaryLogitCoef.getOrDefault("(Intercept)", 0.0);
+
+        // Assign 0 utility for bike model if the bikeHourlyDemand == 0; Assign 0 utility for ped model if the pedHourlyDemand == 0; and Assign 0 utility for car model if the carHourlyDemand == 0 OR truckHourlyDemand == 0; 
 
         double truckHourlyDemand = OsmLink.truckHourlyDemand;
         utility += binaryLogitCoef.getOrDefault("log1p(truck_flow)", 0.0) * Math.log1p(truckHourlyDemand);
@@ -112,11 +114,11 @@ public class CasualtyRateCalculationMCR {
         utility += binaryLogitCoef.getOrDefault("walkStressJct", 0.0) * osmLink.walkStressJct;
         utility += binaryLogitCoef.getOrDefault("width", 0.0) * osmLink.width;
 
-        double speedLimit = osmLink.speedLimitMPH;
+        double speedLimit = OsmLink.speedLimitMPH;
         if (speedLimit < 20) utility += binaryLogitCoef.getOrDefault("speed_limit<20 MPH", 0.0);
         else if (speedLimit < 30) utility += binaryLogitCoef.getOrDefault("speed_limit20 - 29 MPH", 0.0);
 
-        String roadType = osmLink.roadType != null ? osmLink.roadType : "residential";
+        String roadType = OsmLink.roadType != null ? osmLink.roadType : "residential";
         if (roadType.matches("primary|primary_link|trunk|trunk_link"))
             utility += binaryLogitCoef.getOrDefault("roadPrimary/Trunk", 0.0);
         else if (!roadType.contains("motorway")) {
@@ -129,7 +131,7 @@ public class CasualtyRateCalculationMCR {
 
     
     private void assignRiskToLinks(OsmLink osmLink) {
-        Set<Link> links = osmLink.getNetworkLinks();
+        Set<Link> links = OsmLink.getNetworkLinks();
         OpenIntFloatHashMap osmRisk = accidentsContext.getOsmId2info().get(osmLink.getOsmId()) // create an object of network links and assign osm risk 
                 .getSevereFatalCasualityExposureByAccidentTypeByTime()
                 .get(accidentType);
@@ -153,7 +155,7 @@ public class CasualtyRateCalculationMCR {
      */
 
     private void assignCasualtyBinaryToLinks(OsmLink osmLink) {
-        Set<Link> links = osmLink.getNetworkLinks();
+        Set<Link> links = OsmLink.getNetworkLinks();
         for (Link link : links) {
             OpenIntFloatHashMap risk = accidentsContext.getLinkId2info().get(link.getId())
                     .getSevereFatalCasualityExposureByAccidentTypeByTime()
