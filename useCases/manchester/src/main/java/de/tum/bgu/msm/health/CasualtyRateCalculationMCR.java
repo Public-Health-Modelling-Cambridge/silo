@@ -87,22 +87,22 @@ public class CasualtyRateCalculationMCR {
         Set<Link> links = osmLink.getNetworkLinks();
         double utility = binaryLogitCoef.getOrDefault("(Intercept)", 0.0);
 
-        // add traffic demans to the OsmLink.java
-
-        double truckHourlyDemand = links.stream().mapToDouble(l -> analzyer.getDemand(l.getId(), "truck", hour)).average().orElse(0.0) * SCALEFACTOR;
-        double pedHourlyDemand = links.stream().mapToDouble(l -> analzyer.getDemand(l.getId(), "walk", hour)).average().orElse(0.0);
-        double carHourlyDemand = links.stream().mapToDouble(l -> analzyer.getDemand(l.getId(), "car", hour)).average().orElse(0.0) * SCALEFACTOR;
-        double bikeHourlyDemand = links.stream().mapToDouble(l -> analzyer.getDemand(l.getId(), "bike", hour)).average().orElse(0.0);
-        double motorHourlyDemand = carHourlyDemand + truckHourlyDemand;
-
-        if (pedHourlyDemand == 0 && accidentType == AccidentType.PED) return 0;
-        if (carHourlyDemand == 0 && accidentType.name().contains("CAR")) return 0;
-        if (bikeHourlyDemand == 0 && accidentType.name().contains("BIKE")) return 0;
-
+        double truckHourlyDemand = OsmLink.truckHourlyDemand;
         utility += binaryLogitCoef.getOrDefault("log1p(truck_flow)", 0.0) * Math.log1p(truckHourlyDemand);
+        
+        double pedHourlyDemand = OsmLink.pedHourlyDemand;
+        if (pedHourlyDemand == 0 && accidentType == AccidentType.PED) return 0;
         utility += binaryLogitCoef.getOrDefault("log1p(ped_flow)", 0.0) * Math.log1p(pedHourlyDemand);
+        
+        double carHourlyDemand = OsmLink.carHourlyDemand;
+        if (carHourlyDemand == 0 && accidentType.name().contains("CAR")) return 0;
         utility += binaryLogitCoef.getOrDefault("log1p(car_flow)", 0.0) * Math.log1p(carHourlyDemand);
+        
+        double bikeHourlyDemand = OsmLink.bikeHourlyDemand;
+        if (bikeHourlyDemand == 0 && accidentType.name().contains("BIKE")) return 0;
         utility += binaryLogitCoef.getOrDefault("log(bike_flow + 0.1)", 0.0) * Math.log(bikeHourlyDemand + 0.1);
+        
+        double motorHourlyDemand = OsmLink.motorHourlyDemand;
         utility += binaryLogitCoef.getOrDefault("motor_flow", 0.0) * motorHourlyDemand;
         utility += binaryLogitCoef.getOrDefault("log1p(motor_flow)", 0.0) * Math.log1p(motorHourlyDemand);
 
