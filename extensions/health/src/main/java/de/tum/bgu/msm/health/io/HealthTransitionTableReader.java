@@ -18,6 +18,7 @@ public class HealthTransitionTableReader {
 
     public EnumMap<Diseases, Map<String, Double>> readData(DataContainerHealth dataContainer, String path) {
         logger.info("Reading health disease prob table from csv file");
+        logger.info("Reading path " + path);
 
         EnumMap<Diseases, Map<String, Double>> healthDiseaseData = new EnumMap<>(Diseases.class);
 
