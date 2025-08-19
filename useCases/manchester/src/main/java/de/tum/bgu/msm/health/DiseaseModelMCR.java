@@ -283,7 +283,9 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                 System.out.println(" It's been more than 2 years: "  + personHealth.getId());
                 System.out.println(" --  ");
             }
+
             */
+
 
             int year_remission = 2;
             int targetYear = year - year_remission;
@@ -316,6 +318,9 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                 //System.out.println(" -- ");
 
             }
+
+
+
             //update Disease track map
             if (newDisease.isEmpty()) {
                 if (personHealth.getHealthDiseaseTracker().get(year - 1) == null) { // todo: min(keysetTracker) == currentYear ??
@@ -328,6 +333,9 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
             } else {
 
                 List<String> fullDisease = new ArrayList<>();
+
+
+
                 //Set<Diseases> currentDiseases = new HashSet<>(((PersonHealth) personHealth).getCurrentDisease());
 
 
@@ -346,10 +354,25 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                     fullDisease.addAll(personHealth.getHealthDiseaseTracker().get(year - 1)); // get old diseases
                 }
 
+                System.out.println(fullDisease);
+
                 newDisease.stream()
                         .filter(d -> !fullDisease.contains(d))
                         .forEach(fullDisease::add);
+
                     fullDisease.remove("healthy");
+                    System.out.println(fullDisease);
+
+                if (newDisease.contains(Diseases.dead_bike.toString()) ||
+                        newDisease.contains(Diseases.dead_walk.toString()) ||
+                        newDisease.contains(Diseases.dead_car.toString())){
+                    System.out.println(fullDisease);
+                    System.out.println(newDisease);
+                    System.out.println("dead bike or dead walk");
+
+                }
+
+
                 personHealth.getHealthDiseaseTracker().put(year, fullDisease);
             }
         }
