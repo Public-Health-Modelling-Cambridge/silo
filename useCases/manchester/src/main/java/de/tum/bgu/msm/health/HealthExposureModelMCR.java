@@ -221,6 +221,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                 ((DataContainerHealth) dataContainer).getLinkInfo().values().forEach(linkInfo -> {linkInfo.reset();});
 
                 //
+                /*
                 if(completedDays.contains(Day.sunday)){
                     ((DataContainerHealth) dataContainer).getLinkInfoByDay(Day.sunday).values().forEach(linkInfo -> {linkInfo.reset();});
                 } else if(completedDays.contains(Day.saturday)) {
@@ -234,6 +235,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                         linkInfo.reset();
                     });
                 }
+                 */
 
                 //
                 ((DataContainerHealth) dataContainer).getActivityLocations().values().forEach(activityLocation -> {activityLocation.reset();});
