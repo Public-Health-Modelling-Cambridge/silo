@@ -138,13 +138,20 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                 //the age cap should be 100 for all diseases and all-cause-mortality
                 double sickRate = ((DataContainerHealth) dataContainer).getHealthTransitionData().get(diseases).get(compositeKey);
 
+                /*if (diseases.equals(Diseases.depression) & sickRate > 0.05) {
+                    sickRate = 0.05;
+                }*/
+
                 // Effects of exposures
                 double sickProb = 0;
+
                 if (adjustByRelativeRisk) {
                     for (HealthExposures exposures : HealthExposures.values()) {
                         sickRate *= ((PersonHealth) person).getRelativeRisksByDisease().get(exposures).getOrDefault(diseases, 1.f);
                     }
                 }
+
+
 
                 // Disease interactions effects (diabetes on coronary heart disease/stroke)
                 if (((PersonHealth) person).getCurrentDisease().contains(Diseases.diabetes)) {
@@ -166,6 +173,8 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                         }
                     }
                 }
+
+
 
                 //
                 sickProb = 1 - Math.exp(-sickRate);
@@ -236,12 +245,43 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                 }
 
                 //TODO: control random number? survival equation
-                if (random.nextFloat() < (personHealth.getCurrentDiseaseProb().get(diseases))) {
+                if (random.nextDouble() < (personHealth.getCurrentDiseaseProb().get(diseases))) {
                     if (!personHealth.getCurrentDisease().contains(diseases)) {
                         personHealth.getCurrentDisease().add(diseases);
                         newDisease.add(diseases.toString());
                     }
                 }
+            }
+
+            // Set remission in terms of years - this is year_remission -1, so with 2, the remission_year is 1 year
+            int year_remission = 2;
+            int targetYear = year - year_remission;
+
+            List<String> trackerYearLag = personHealth.getHealthDiseaseTracker().get(targetYear);
+            List<String> trackerPrevYear = personHealth.getHealthDiseaseTracker().get(year - 1);
+
+            if (trackerYearLag != null &&
+                    targetYear >= Properties.get().main.startYear &&
+                    trackerYearLag.contains(Diseases.depression.toString()) &&
+                    trackerPrevYear != null &&
+                    trackerPrevYear.contains(Diseases.depression.toString())) {
+
+                //System.out.println(personHealth.getHealthDiseaseTracker().toString());
+
+                // Create a new modifiable list to avoid changing identity of singleton lists
+                List<String> updatedList = new ArrayList<>(trackerPrevYear);
+
+                // Only remove the first occurrence of "depression" (if present)
+                updatedList.remove(Diseases.depression.toString());
+
+                if (updatedList.isEmpty()) {
+                    updatedList.add("healthy");
+                }
+                // Update the map with the new list for year - 1
+                personHealth.getHealthDiseaseTracker().put(year - 1, updatedList);
+
+                //System.out.println("depression removed from: " + personHealth.getId());
+
             }
 
             //update Disease track map
@@ -254,17 +294,26 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                     personHealth.getHealthDiseaseTracker().put(year, personHealth.getHealthDiseaseTracker().get(year - 1));
                 }
             } else {
+
                 List<String> fullDisease = new ArrayList<>();
-                Set<Diseases> currentDiseases = new HashSet<>(((PersonHealth) personHealth).getCurrentDisease());
+
                 // DO NOT add previous states when a person has died in the injury model. These states are exclusive.
                 if (personHealth.getHealthDiseaseTracker().get(year - 1) != null &&
-                        !(newDisease.equals(Diseases.dead_bike) || newDisease.equals(Diseases.dead_walk) || newDisease.equals(Diseases.dead_car)) &&
-                        !(currentDiseases.contains(Diseases.dead_bike) || currentDiseases.contains(Diseases.dead_walk) || currentDiseases.contains(Diseases.dead_car)))
+                        !(newDisease.contains(Diseases.dead_bike.toString()) ||
+                                newDisease.contains(Diseases.dead_walk.toString()) ||
+                                newDisease.contains(Diseases.dead_car.toString())) &&
+                        !(((PersonHealth) person).getCurrentDisease().contains(Diseases.dead_bike) ||
+                                ((PersonHealth) person).getCurrentDisease().contains(Diseases.dead_walk) ||
+                                ((PersonHealth) person).getCurrentDisease().contains(Diseases.dead_car)))
                 {
                     fullDisease.addAll(personHealth.getHealthDiseaseTracker().get(year - 1)); // get old diseases
                 }
-                fullDisease.addAll(newDisease); // add new diseases
-                fullDisease.remove("healthy");
+
+                newDisease.stream()
+                        .filter(d -> !fullDisease.contains(d))
+                        .forEach(fullDisease::add);
+                    fullDisease.remove("healthy");
+
                 personHealth.getHealthDiseaseTracker().put(year, fullDisease);
             }
         }

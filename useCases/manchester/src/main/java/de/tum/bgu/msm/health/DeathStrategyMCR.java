@@ -53,6 +53,17 @@ public class DeathStrategyMCR implements DeathStrategy {
 
         double alpha = dataContainer.getHealthTransitionData().get(Diseases.all_cause_mortality).get(compositeKey);
 
+
+        /*calculate odds: odd_1 = transition_raw/(1 - transition_raw). transition_raw = 1 - exp-(transition_raw-this is the data)
+        multiply by relative risks: odd_2 = odd_1 * rr
+        translate to probability = probability = odd_2/(1+odd_2)
+
+         */
+
+
+        //calculation of probabilities for mortality with first adjustment using rates*rr exposures/PA and then
+        // adjusting probabilities (previous rate converted to probability) to odds ratios and multiplied by teh
+        // disease rr and back to prob. I understand this was not done this way before.
         //no rr adjustment for age under 18
         if(personAge < 18){
             return alpha;
@@ -60,9 +71,13 @@ public class DeathStrategyMCR implements DeathStrategy {
 
         if(adjustByRelativeRisk){
             for(HealthExposures healthExposures : ((PersonHealth)person).getRelativeRisksByDisease().keySet()){
-                alpha *=  ((PersonHealth)person).getRelativeRisksByDisease().get(healthExposures).get(Diseases.all_cause_mortality);
+                alpha *= ((PersonHealth)person).getRelativeRisksByDisease().get(healthExposures).get(Diseases.all_cause_mortality);
             }
         }
+
+
+
+        //alpha = alpha / (1 - alpha);
 
         // risk factors
         Set<Diseases> currentDiseases = new HashSet<>(((PersonHealth) person).getCurrentDisease());
@@ -84,9 +99,11 @@ public class DeathStrategyMCR implements DeathStrategy {
                 Diseases.severely_injured_walk
         );
 
+
+        /*
         // Risk factors
-        // todo: apply only for people more than 40
-        if(personAge > 40){
+        // todo: apply only for people between 40 and 80
+        if(personAge >  39 & personAge < 81 ){
             if (currentDiseases.contains(Diseases.all_cause_dementia)) {
                 alpha *= 8.42;
             }
@@ -113,7 +130,28 @@ public class DeathStrategyMCR implements DeathStrategy {
             }
         }
 
+         */
+        if (Collections.disjoint(currentDiseases, injuries)) {
 
+            if (currentDiseases.size() == 1) {
+                alpha *= 1.23;
+            }
+            if (currentDiseases.size() == 2) {
+                alpha *= 1.62;
+            }
+            if (currentDiseases.size() == 3) {
+                alpha *= 2.09;
+            }
+            if (currentDiseases.size() == 4) {
+                alpha *= 2.77;
+            }
+            if (currentDiseases.size() == 5) {
+                alpha *= 3.46;
+            }
+            if (currentDiseases.size() > 5) {
+                alpha *= 5.14;
+            }
+        }
 
         // todo: what happens with people < 18
         if (!Collections.disjoint(currentDiseases, injuries)) {
@@ -124,6 +162,8 @@ public class DeathStrategyMCR implements DeathStrategy {
             }
         }
 
-        return alpha;
+        return  (1 - Math.exp(-alpha));
+
+        //return alpha/(1+alpha);
     }
 }
