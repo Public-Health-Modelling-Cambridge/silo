@@ -131,24 +131,26 @@ public class DeathStrategyMCR implements DeathStrategy {
         }
 
          */
+        if (Collections.disjoint(currentDiseases, injuries)) {
 
-        if(currentDiseases.size() == 1){
-            alpha *= 1.23;
-        }
-        if(currentDiseases.size() == 2){
-            alpha *= 1.62;
-        }
-        if(currentDiseases.size() == 3){
-            alpha *= 2.09;
-        }
-        if(currentDiseases.size() == 4){
-            alpha *= 2.77;
-        }
-        if(currentDiseases.size() == 5){
-            alpha *= 3.46;
-        }
-        if(currentDiseases.size() > 5){
-            alpha *= 5.14;
+            if (currentDiseases.size() == 1) {
+                alpha *= 1.23;
+            }
+            if (currentDiseases.size() == 2) {
+                alpha *= 1.62;
+            }
+            if (currentDiseases.size() == 3) {
+                alpha *= 2.09;
+            }
+            if (currentDiseases.size() == 4) {
+                alpha *= 2.77;
+            }
+            if (currentDiseases.size() == 5) {
+                alpha *= 3.46;
+            }
+            if (currentDiseases.size() > 5) {
+                alpha *= 5.14;
+            }
         }
 
         // todo: what happens with people < 18
