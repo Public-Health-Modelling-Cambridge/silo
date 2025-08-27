@@ -16,15 +16,16 @@ import java.util.*;
 public class InjurySampler {
 
     private static final Logger logger = LogManager.getLogger(HealthExposureModelMCR.class);
-    private static final Random random = new Random();
+    private static Random random;
     private CalibrationFactors calibrationFactors;
     private Properties properties;
     private Map<String, EnumMap<Gender, Map<String, InjuryRRTableReader. DataEntry>>> injuryData;
 
-    InjurySampler(Properties properties, CalibrationFactors calibrationFactors, Map<String, EnumMap<Gender, Map<String, InjuryRRTableReader. DataEntry>>> injuryData) {
+    InjurySampler(Properties properties, CalibrationFactors calibrationFactors, Map<String, EnumMap<Gender, Map<String, InjuryRRTableReader. DataEntry>>> injuryData, Random random) {
         this.calibrationFactors = calibrationFactors;
         this.properties = properties;
         this.injuryData = injuryData;
+        this.random = random;
     }
 
     /**

@@ -192,7 +192,7 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
             Map<String, EnumMap<Gender, Map<String, InjuryRRTableReader. DataEntry>>> injuryData = ((HealthDataContainerImpl) dataContainer).getHealthInjuryRRdata();
 
             // Set up the injury sampler and process the injured people
-            InjurySampler injSampler = new InjurySampler(properties, calibrationFactors, injuryData);
+            InjurySampler injSampler = new InjurySampler(properties, calibrationFactors, injuryData, random);
 
             // The target come from the accidentModel, they should be add to the HealthDataContainer
             /*
