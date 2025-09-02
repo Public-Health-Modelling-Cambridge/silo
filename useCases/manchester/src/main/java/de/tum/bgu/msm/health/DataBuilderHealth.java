@@ -166,6 +166,8 @@ public class DataBuilderHealth {
         dataContainer.setDoseResponseData(doseResponseReader.getDoseResponseData());
         dataContainer.setHealthPrevalenceData(new PrevalenceDataReader().readData(properties.main.baseDirectory + properties.healthData.prevalenceDataFile));
         dataContainer.setHealthInjuryRRdata(new InjuryRRTableReader().readData(properties.main.baseDirectory + properties.healthData.healthInjuryRRDataFile));
+        dataContainer.setCarShareInjurydata(new CarDriverShareTableReader().readData(properties.main.baseDirectory + properties.healthData.carShareInjuryDataFile));
+
 
         MicroDataScaler microDataScaler = new MicroDataScaler(dataContainer, properties);
         microDataScaler.scale();

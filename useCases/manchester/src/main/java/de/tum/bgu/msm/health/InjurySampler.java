@@ -104,13 +104,48 @@ public class InjurySampler {
 
     public List<Integer> sampleInjuries2(DataContainer dataContainer, String mode) {
         List<Integer> injuredPersons = new ArrayList<>();
+        double averageCarRR = 0.8363541;
 
         // Collect injury risks for the mode
         for (Person person : dataContainer.getHouseholdDataManager().getPersons()) {
+
+            //
+            // Determine age group
+            int personAge = person.getAge();
+            String ageGroup;
+            if (personAge < 17) {
+                ageGroup = "< 17";
+            } else if (personAge <= 20) {
+                ageGroup = "17-20";
+            } else if (personAge <= 29) {
+                ageGroup = "21-29";
+            } else if (personAge <= 39) {
+                ageGroup = "30-39";
+            } else if (personAge <= 49) {
+                ageGroup = "40-49";
+            } else if (personAge <= 59) {
+                ageGroup = "50-59";
+            } else if (personAge <= 69) {
+                ageGroup = "60-69";
+            } else {
+                ageGroup = "70+";
+            }
+
+
             double injuryRisk = ((PersonHealth) person).getWeeklyAccidentRisk("severeFatalInjury" + mode);
 
             // adjust injury risk by applying age/gender relative risks + finalCalibration to fit link based stats
-            injuryRisk = injuryRisk * getCasualtyRR_byAge_Gender(person.getGender(), person.getAge(), mode, (HealthDataContainerImpl) dataContainer) * calibrationFactors.getCalibrationFactor(properties.main.scenarioName, mode) ;
+            double personalRR = getCasualtyRR_byAge_Gender(person.getGender(), person.getAge(), mode, (HealthDataContainerImpl) dataContainer);
+
+            double carShare = ((HealthDataContainerImpl) dataContainer).getCarShareInjurydata().get(ageGroup).get(person.getGender()).shareDriver;
+
+            if (mode.equals("Car")){
+                injuryRisk = injuryRisk * (personalRR * carShare + averageCarRR * (1-carShare)) * calibrationFactors.getCalibrationFactor(properties.main.scenarioName, mode) ;
+            }
+            else{
+                injuryRisk = injuryRisk * personalRR * calibrationFactors.getCalibrationFactor(properties.main.scenarioName, mode) ;
+            }
+            //injuryRisk = injuryRisk * personalRR * calibrationFactors.getCalibrationFactor(properties.main.scenarioName, mode) ;
 
             if (random.nextDouble() < injuryRisk) {
                 injuredPersons.add(person.getId());
