@@ -40,6 +40,7 @@ import org.matsim.api.core.v01.Id;
 import org.matsim.api.core.v01.Scenario;
 import org.matsim.api.core.v01.TransportMode;
 import org.matsim.api.core.v01.network.Link;
+import org.matsim.api.core.v01.network.Network;
 import org.matsim.api.core.v01.population.Person;
 import org.matsim.api.core.v01.population.Population;
 import org.matsim.contrib.dvrp.trafficmonitoring.TravelTimeUtils;
@@ -49,6 +50,7 @@ import org.matsim.core.config.groups.*;
 import org.matsim.core.controler.Controler;
 import org.matsim.core.controler.ControlerDefaults;
 import org.matsim.core.controler.OutputDirectoryHierarchy;
+import org.matsim.core.network.NetworkUtils;
 import org.matsim.core.population.PopulationUtils;
 import org.matsim.core.router.MainModeIdentifierImpl;
 import org.matsim.core.router.TripStructureUtils;
@@ -60,10 +62,7 @@ import org.matsim.vehicles.Vehicle;
 import org.matsim.vehicles.VehicleType;
 import org.matsim.vehicles.VehicleUtils;
 import org.matsim.vehicles.VehiclesFactory;
-import routing.BicycleConfigGroup;
-import routing.BicycleModule;
-import routing.WalkConfigGroup;
-import routing.WalkModule;
+import routing.*;
 import routing.components.Gradient;
 import routing.components.JctStress;
 import routing.components.LinkAmbience;
@@ -257,6 +256,9 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
             matsimScenario.getConfig().qsim().setVehicleBehavior(QSimConfigGroup.VehicleBehavior.teleport);
             matsimScenario.getConfig().qsim().setUsePersonIdForMissingVehicleId(true);
 
+            // Create active mode networkk
+            Network activeNetwork = extractModeSpecificNetwork(matsimScenario.getNetwork(),new HashSet<>(Arrays.asList(TransportMode.bike, TransportMode.walk)));
+            matsimScenario.setNetwork(activeNetwork);
 
             //set up controler
             final Controler controlerBikePed = new Controler(matsimScenario);
@@ -612,6 +614,13 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
             ((SkimTravelTimes) mainTravelTimes).updateRegionalTravelTimes(dataContainer.getGeoData().getRegions().values(),
                     dataContainer.getGeoData().getZones().values());
         }
+    }
+    
+    public static Network extractModeSpecificNetwork(Network fullNetwork, Set<String> transportModes) {
+        Network modeSpecificNetwork = NetworkUtils.createNetwork();
+        new TransportModeNetworkFilter(fullNetwork).filter(modeSpecificNetwork, transportModes);
+        NetworkUtils.runNetworkCleaner(modeSpecificNetwork);
+        return modeSpecificNetwork;
     }
 
 }
