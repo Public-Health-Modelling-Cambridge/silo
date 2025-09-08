@@ -870,8 +870,10 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
 
         AtomicInteger NO_PATH_TRIP = new AtomicInteger();
 
+        LeastCostPathCalculator pathCalculator = new SpeedyALTFactory().createPathCalculator(scenario.getNetwork(), travelDisutility, travelTime);
+
         for (final List<Trip> partition : partitions) {
-            LeastCostPathCalculator pathCalculator = new SpeedyALTFactory().createPathCalculator(scenario.getNetwork(),travelDisutility,travelTime);
+
             PopulationFactory factory = PopulationUtils.getFactory();
             executor.addTaskToQueue(() -> {
                 try {
@@ -910,7 +912,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                             vehicle = fac.createVehicle(vehicleId,vehicleType);
                         }
 
-                        LeastCostPathCalculator.Path outboundPath = pathCalculator.calcLeastCostPath(originNode, destinationNode,outboundDepartureTimeInSeconds,person,vehicle);
+                        LeastCostPathCalculator.Path outboundPath = pathCalculator.calcLeastCostPath(originNode, destinationNode, outboundDepartureTimeInSeconds, person, vehicle);
                         if(outboundPath == null){
                             logger.warn("trip id: " + trip.getId() + ", trip depart time: " + trip.getDepartureTimeInMinutes() +
                                     "origin coord: [" + trip.getTripOrigin().getX() + "," + trip.getTripOrigin().getY() + "], " +
