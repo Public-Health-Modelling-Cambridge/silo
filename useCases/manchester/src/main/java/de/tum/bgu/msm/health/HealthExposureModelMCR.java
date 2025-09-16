@@ -153,7 +153,6 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                 logger.warn("Run health exposure model for " + day);
 
                 for(Mode mode : Mode.values()){
-                    if(mode.equals(Mode.bicycle)) {
                         switch (mode) {
                             case autoDriver:
                             case autoPassenger:
@@ -205,7 +204,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                         mitoTrips.clear();
                         mitoTrips = null; // Optional: nullify if not reused immediately
                         mitoTrips = new HashMap<>(); // Reinitialize for next mode
-                    }
+
                 }
 
                 // Track completed simulated days
