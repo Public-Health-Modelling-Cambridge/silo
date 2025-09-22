@@ -27,6 +27,7 @@ public class HealthModelProperties {
     public final String avgSpeedFile;
     public final String prevalenceDataFile;
     public final String healthInjuryRRDataFile;
+    public final String carShareInjuryDataFile;
     public final String healthTransitionData;
     public final Boolean adjustByRelativeRisk;
     public final String baseExposureFile;
@@ -83,6 +84,8 @@ public class HealthModelProperties {
         prevalenceDataFile = PropertiesUtil.getStringProperty(bundle, "prev.data.file", "input/health/base_prevalence_id_clean.csv");
 
         healthInjuryRRDataFile = PropertiesUtil.getStringProperty(bundle, "injury.rr.data.file", "input/accident/injury_relativeRisks.csv");
+
+        carShareInjuryDataFile = PropertiesUtil.getStringProperty(bundle, "car.share.injury.data.file", "input/accident/age_gender_driver_prob_base.csv");
 
         healthTransitionData = PropertiesUtil.getStringProperty(bundle, "health.transition.data", "input/health/health_transitions_manchester.csv");
 

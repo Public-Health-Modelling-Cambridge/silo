@@ -22,7 +22,7 @@ public class CalibrationFactors {
                             modeFactors.put(mode, 2.301601915);
                             break;
                         case "Car":
-                            modeFactors.put(mode, 1.265471499);
+                            modeFactors.put(mode, 2.01235657546337);
                             break;
                         case "Walk":
                             modeFactors.put(mode, 0.741037452);
@@ -34,7 +34,7 @@ public class CalibrationFactors {
                             modeFactors.put(mode, 1.583259223);
                             break;
                         case "Car":
-                            modeFactors.put(mode, 1.312982374);
+                            modeFactors.put(mode, 2.056126119);
                             break;
                         case "Walk":
                             modeFactors.put(mode, 0.734002674);
@@ -46,7 +46,7 @@ public class CalibrationFactors {
                             modeFactors.put(mode, 2.373450201);
                             break;
                         case "Car":
-                            modeFactors.put(mode, 1.269321473);
+                            modeFactors.put(mode, 2.019559765);
                             break;
                         case "Walk":
                             modeFactors.put(mode, 0.720561993);
@@ -58,7 +58,7 @@ public class CalibrationFactors {
                             modeFactors.put(mode, 1.605557743);
                             break;
                         case "Car":
-                            modeFactors.put(mode, 1.316924854);
+                            modeFactors.put(mode, 2.060215446);
                             break;
                         case "Walk":
                             modeFactors.put(mode, 0.714050054);
