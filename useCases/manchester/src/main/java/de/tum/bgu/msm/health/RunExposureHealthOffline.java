@@ -2,12 +2,14 @@ package de.tum.bgu.msm.health;
 
 import de.tum.bgu.msm.data.Day;
 import de.tum.bgu.msm.data.Zone;
+import de.tum.bgu.msm.data.person.Gender;
 import de.tum.bgu.msm.data.person.Person;
 import de.tum.bgu.msm.health.airPollutant.AirPollutantModel;
 import de.tum.bgu.msm.health.data.LinkInfo;
 import de.tum.bgu.msm.health.data.ActivityLocation;
 import de.tum.bgu.msm.health.data.PersonHealth;
 import de.tum.bgu.msm.health.disease.Diseases;
+//import de.tum.bgu.msm.health.io.CarDriverShareTableReader;
 import de.tum.bgu.msm.health.io.PrevalenceDataReader;
 import de.tum.bgu.msm.health.noise.NoiseModel;
 import de.tum.bgu.msm.properties.Properties;
@@ -23,10 +25,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import de.tum.bgu.msm.health.injury.AccidentModel;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Implements SILO for the Greater Manchester
@@ -65,6 +64,7 @@ public class RunExposureHealthOffline {
         // runs
         sportPAModelMCR.endYear(2021);
         accidentModel.endYear(2021);
+        //exposureModelMCR.setup(); // read-in the exposure file
         exposureModelMCR.endYear(2021);
         diseaseModelMCR.setup();
         diseaseModelMCR.endYear(2021);
