@@ -626,11 +626,12 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
     private void calculateTripHealthIndicatorPt(ArrayList<Trip> trips, Day day, Mode mode) {
         logger.info("Updating trip health data for mode " + mode + ", day " + day);
 
-        //final int partitionSize = (int) ((double) trips.size() / Runtime.getRuntime().availableProcessors()) + 1;
-        final int partitionSize = (int) ((double) trips.size() / 28) + 1;
+        final int partitionSize = (int) ((double) trips.size() / Runtime.getRuntime().availableProcessors()) + 1;
+        //final int partitionSize = (int) ((double) trips.size() / 28) + 1;
         Iterable<List<Trip>> partitions = Iterables.partition(trips, partitionSize);
 
-        ConcurrentExecutor<Void> executor = ConcurrentExecutor.fixedPoolService(Math.min(Runtime.getRuntime().availableProcessors(), 28));
+        // ConcurrentExecutor<Void> executor = ConcurrentExecutor.fixedPoolService(Math.min(Runtime.getRuntime().availableProcessors(), 28));
+        ConcurrentExecutor<Void> executor = ConcurrentExecutor.fixedPoolService(Runtime.getRuntime().availableProcessors());
 
         AtomicInteger counter = new AtomicInteger();
         logger.info("Partition Size: " + partitionSize);
@@ -805,8 +806,8 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
     private void calculateTripHealthIndicator(List<Trip> trips, Day day, Mode mode) {
         logger.info("Updating trip health data for mode " + mode + ", day " + day);
 
-        //final int partitionSize = (int) ((double) trips.size() / Runtime.getRuntime().availableProcessors()) + 1;
-        final int partitionSize = (int) ((double) trips.size() / 28) + 1;
+        final int partitionSize = (int) ((double) trips.size() / Runtime.getRuntime().availableProcessors()) + 1;
+        //final int partitionSize = (int) ((double) trips.size() / 28) + 1;
         Iterable<List<Trip>> partitions = Iterables.partition(trips, partitionSize);
 
         TravelTime travelTime;
@@ -866,8 +867,8 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
         }
 
         // ConcurrentExecutor.fixedPoolService(Math.min(Runtime.getRuntime().availableProcessors(), 14));
-        // ConcurrentExecutor<Void> executor = ConcurrentExecutor.fixedPoolService(Runtime.getRuntime().availableProcessors());
-        ConcurrentExecutor<Void> executor = ConcurrentExecutor.fixedPoolService(Math.min(Runtime.getRuntime().availableProcessors(), 28));
+        ConcurrentExecutor<Void> executor = ConcurrentExecutor.fixedPoolService(Runtime.getRuntime().availableProcessors());
+        //ConcurrentExecutor<Void> executor = ConcurrentExecutor.fixedPoolService(Math.min(Runtime.getRuntime().availableProcessors(), 28));
         AtomicInteger counter = new AtomicInteger();
         logger.info("Partition Size: " + partitionSize);
         AtomicInteger NO_PATH_TRIP = new AtomicInteger();
