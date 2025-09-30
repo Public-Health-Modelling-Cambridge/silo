@@ -177,6 +177,8 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                                     .filter(trip -> trip.getTripMode().equals(mode) && trip.getDepartureDay().equals(day))
                                     .collect(Collectors.toMap(Trip::getId, trip -> trip));
 
+                            System.out.println("Number of trips for day " + day + " and mode " + mode + ": " + mitoTrips.size());
+
 
 
 
