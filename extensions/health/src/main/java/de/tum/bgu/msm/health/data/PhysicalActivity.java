@@ -54,7 +54,7 @@ public class PhysicalActivity {
         double speed = metres / seconds;
         double speedMoving = speed / (1 - STATIONARY_TIME_PROPORTION);
         double speedAir = speedMoving;
-        double powerRoadResistance = groundResistance * (PERSON_KG + BIKE_AND_BAG_KG) * speedMoving;
+        double powerRoadResistance = groundResistance * (PERSON_KG + BIKE_AND_BAG_KG) * speedMoving * GRAVITY_M_PER_S2;
         double powerWindResistance = WIND_RESISTANCE_COEFFICIENT * FRONTAL_AREA_M2 * AIR_DENSITY_KG_PER_M2 * Math.pow(speedAir,2) * speedMoving;
         double powerGravity = GRAVITY_M_PER_S2 * gradient *  (PERSON_KG + BIKE_AND_BAG_KG) * speedMoving;
         double power = (powerRoadResistance + powerWindResistance + powerGravity) / CYCLE_EFFICIENCY;
