@@ -95,6 +95,8 @@ public class PollutionExposure {
                 modeExposureFactor = 8.6;
                 break;
             case bus:
+                modeExposureFactor = 4.5;
+                break;
             case bicycle:
                 if (linkCarsAllowed == 0) {
                     modeExposureFactor = 1.;
