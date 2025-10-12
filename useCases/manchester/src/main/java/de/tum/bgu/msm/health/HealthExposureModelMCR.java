@@ -779,8 +779,8 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
 
             hourOccupied[exactWeekHour] += (float) durationInThisHour;
 
-            double legPartExposurePm25 = PollutionExposure.getLinkExposurePm25(legMode, properties.get().healthData.DEFAULT_ROAD_TRAFFIC_INCREMENTAL_PM25, legTime_s, legMarginalMet);
-            double legPartExposureNo2 = PollutionExposure.getLinkExposureNo2(legMode, properties.get().healthData.DEFAULT_ROAD_TRAFFIC_INCREMENTAL_NO2,legTime_s, legMarginalMet);
+            double legPartExposurePm25 = PollutionExposure.getLinkExposurePm25(legMode, properties.get().healthData.DEFAULT_ROAD_TRAFFIC_INCREMENTAL_PM25, legTime_s, legMarginalMet, "none", "none", 1);
+            double legPartExposureNo2 = PollutionExposure.getLinkExposureNo2(legMode, properties.get().healthData.DEFAULT_ROAD_TRAFFIC_INCREMENTAL_NO2,legTime_s, legMarginalMet, "none", "none", 1);
 
             legExposurePm25ByHour[exactWeekHour] += legPartExposurePm25;
             legExposureNo2ByHour[exactWeekHour] += legPartExposureNo2;
@@ -1088,8 +1088,12 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                             linkInfo.getExposure2Pollutant2TimeBin().getOrDefault(Pollutant.PM2_5_non_exhaust,new OpenIntFloatHashMap()).get(exactDayHour);
                     double linkConcentrationNo2 = linkInfo.getExposure2Pollutant2TimeBin().getOrDefault(Pollutant.NO2,new OpenIntFloatHashMap()).get(exactDayHour);
 
-                    linkExposurePm25 = PollutionExposure.getLinkExposurePm25(mode, linkConcentrationPm25, durationInThisHour * 3600, linkMarginalMet);
-                    linkExposureNo2 =PollutionExposure.getLinkExposureNo2(mode, linkConcentrationNo2, durationInThisHour * 3600, linkMarginalMet);
+                    String linkCycleWay = (String) link.getAttributes().getAttribute("cycleway");
+                    String linkCycleOsm = (String) link.getAttributes().getAttribute("cycleosm");
+                    int linkCarAllowed = link.getAllowedModes().contains("car") ? 1 : 0;
+
+                    linkExposurePm25 = PollutionExposure.getLinkExposurePm25(mode, linkConcentrationPm25, durationInThisHour * 3600, linkMarginalMet, linkCycleWay, linkCycleOsm, linkCarAllowed);
+                    linkExposureNo2 =PollutionExposure.getLinkExposureNo2(mode, linkConcentrationNo2, durationInThisHour * 3600, linkMarginalMet, linkCycleWay, linkCycleOsm, linkCarAllowed);
 
                     pathExposurePm25ByHour[exactWeekHour] += linkExposurePm25;
                     pathExposureNo2ByHour[exactWeekHour] += linkExposureNo2;

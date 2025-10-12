@@ -3,6 +3,8 @@ package de.tum.bgu.msm.health.data;
 import de.tum.bgu.msm.data.Mode;
 import de.tum.bgu.msm.properties.Properties;
 
+import java.util.Objects;
+
 public class PollutionExposure {
 
     // Background Rates
@@ -52,7 +54,7 @@ public class PollutionExposure {
     }
 
     // Link Exposures
-    public static double getLinkExposurePm25(Mode mode, double linkPm25, double linkSeconds, double linkMarginalMet) {
+    public static double getLinkExposurePm25(Mode mode, double linkPm25, double linkSeconds, double linkMarginalMet, String linkCycleType, String linkCycleOsm, int linkCarsAllowed) {
 
         double modeExposureFactor = 0.;
         switch(mode) {
@@ -65,7 +67,17 @@ public class PollutionExposure {
                 modeExposureFactor = 1.9;
                 break;
             case bicycle:
-                modeExposureFactor = 2.;
+                if (linkCarsAllowed == 0) {
+                    modeExposureFactor = 1.;
+                } else{
+                    if (Objects.equals(linkCycleType, "lane") || Objects.equals(linkCycleOsm, "painted")){
+                        modeExposureFactor = 2. * 0.9;
+                    } else if (Objects.equals(linkCycleType, "track") || Objects.equals(linkCycleOsm, "protected") ) {
+                        modeExposureFactor = 2. * 0.8;
+                    } else{
+                        modeExposureFactor = 2.;
+                    }
+                }
                 break;
         }
 
@@ -74,7 +86,7 @@ public class PollutionExposure {
         return (BACKGROUND_PM25 + linkPm25) * modeExposureFactor * ventilationRate * linkSeconds / 3600.;
     }
 
-    public static double getLinkExposureNo2(Mode mode, double linkNo2, double linkSeconds, double linkMarginalMet) {
+    public static double getLinkExposureNo2(Mode mode, double linkNo2, double linkSeconds, double linkMarginalMet, String linkCycleType, String linkCycleOsm, int linkCarsAllowed) {
 
         double modeExposureFactor = 0.;
         switch(mode) {
@@ -84,7 +96,17 @@ public class PollutionExposure {
                 break;
             case bus:
             case bicycle:
-                modeExposureFactor = 4.5;
+                if (linkCarsAllowed == 0) {
+                    modeExposureFactor = 1.;
+                } else{
+                    if (Objects.equals(linkCycleType, "lane") || Objects.equals(linkCycleOsm, "painted")){
+                        modeExposureFactor = 4.5 * 0.9;
+                    } else if (Objects.equals(linkCycleType, "track") || Objects.equals(linkCycleOsm, "protected")) {
+                        modeExposureFactor = 4.5 * 0.8;
+                    } else{
+                        modeExposureFactor = 4.5;
+                    }
+                }
                 break;
             case walk:
                 modeExposureFactor = 3.0;
