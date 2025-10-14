@@ -83,7 +83,7 @@ public class PollutionExposure {
 
         double ventilationRate = BASE_LEVEL_INHALATION_RATE + linkMarginalMet / 2.;
 
-        return (BACKGROUND_PM25 + linkPm25) * modeExposureFactor * ventilationRate * linkSeconds / 3600.;
+        return (BACKGROUND_PM25 + (linkPm25 * modeExposureFactor)) * ventilationRate * linkSeconds / 3600.;
     }
 
     public static double getLinkExposureNo2_newexp(Mode mode, double linkNo2, double linkSeconds, double linkMarginalMet, String linkCycleType, String linkCycleOsm, int linkCarsAllowed) {
@@ -117,7 +117,7 @@ public class PollutionExposure {
 
         double ventilationRate = BASE_LEVEL_INHALATION_RATE + linkMarginalMet / 2.;
 
-        return (BACKGROUND_NO2 + linkNo2) * modeExposureFactor * ventilationRate * linkSeconds / 3600.;
+        return (BACKGROUND_NO2 + (linkNo2 * modeExposureFactor ))* ventilationRate * linkSeconds / 3600.;
     }
 
     // Link Exposures
