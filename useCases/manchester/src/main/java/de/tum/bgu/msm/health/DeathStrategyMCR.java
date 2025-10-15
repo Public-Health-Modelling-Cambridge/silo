@@ -53,14 +53,6 @@ public class DeathStrategyMCR implements DeathStrategy {
 
         double alpha = dataContainer.getHealthTransitionData().get(Diseases.all_cause_mortality).get(compositeKey);
 
-
-        /*calculate odds: odd_1 = transition_raw/(1 - transition_raw). transition_raw = 1 - exp-(transition_raw-this is the data)
-        multiply by relative risks: odd_2 = odd_1 * rr
-        translate to probability = probability = odd_2/(1+odd_2)
-
-         */
-
-
         //calculation of probabilities for mortality with first adjustment using rates*rr exposures/PA and then
         // adjusting probabilities (previous rate converted to probability) to odds ratios and multiplied by teh
         // disease rr and back to prob. I understand this was not done this way before.
@@ -76,23 +68,8 @@ public class DeathStrategyMCR implements DeathStrategy {
         }
 
 
-
-        //alpha = alpha / (1 - alpha);
-
         // risk factors
         Set<Diseases> currentDiseases = new HashSet<>(((PersonHealth) person).getCurrentDisease());
-        Set<Diseases> cancers = Set.of(
-                Diseases.breast_cancer,
-                Diseases.endometrial_cancer,
-                Diseases.colon_cancer,
-                Diseases.bladder_cancer,
-                //Diseases.esophageal_cancer,
-                //Diseases.gastric_cardia_cancer,
-                Diseases.head_neck_cancer,
-                //Diseases.liver_cancer,
-                Diseases.lung_cancer,
-                Diseases.rectum_cancer
-        );
         Set<Diseases> injuries = Set.of(
                 Diseases.severely_injured_car,
                 Diseases.severely_injured_bike,
@@ -100,37 +77,6 @@ public class DeathStrategyMCR implements DeathStrategy {
         );
 
 
-        /*
-        // Risk factors
-        // todo: apply only for people between 40 and 80
-        if(personAge >  39 & personAge < 81 ){
-            if (currentDiseases.contains(Diseases.all_cause_dementia)) {
-                alpha *= 8.42;
-            }
-            if (currentDiseases.contains(Diseases.parkinson)) {
-                alpha *= 4.6;
-            }
-            if (currentDiseases.contains(Diseases.copd)) {
-                alpha *= 2.58;
-            }
-            if (currentDiseases.contains(Diseases.stroke)) {
-                alpha *= 1.85;
-            }
-            if (!Collections.disjoint(currentDiseases, cancers)) {
-                alpha *= 1.99;
-            }
-            if (currentDiseases.contains(Diseases.diabetes)) {
-                alpha *= 1.93;
-            }
-            if (currentDiseases.contains(Diseases.coronary_heart_disease)) {
-                alpha *= 1.72;
-            }
-            if (currentDiseases.contains(Diseases.depression)) {
-                alpha *= 1.4;
-            }
-        }
-
-         */
         if (Collections.disjoint(currentDiseases, injuries)) {
 
             if (currentDiseases.size() == 1) {
@@ -164,6 +110,5 @@ public class DeathStrategyMCR implements DeathStrategy {
 
         return  (1 - Math.exp(-alpha));
 
-        //return alpha/(1+alpha);
     }
 }

@@ -25,11 +25,15 @@ public class RelativeRisksDisease {
                 System.out.println("No dose response data for PA, disease: " + diseases.name());
                 continue;
             }
-            double rr = LinearInterpolation.interpolate(doseResponseTable.getColumnAsDouble("dose"),
-                    doseResponseTable.getColumnAsDouble("RR"), total_mmet);
+            // Put a hard cut of 7.5 for all_cause_dementia, and keep 17.5 for the rest
+            // related issue: https://github.com/Public-Health-Modelling-Cambridge/silo/issues/16
+            double rr = LinearInterpolation.interpolate(
+                    doseResponseTable.getColumnAsDouble("dose"),
+                    doseResponseTable.getColumnAsDouble("RR"),
+                    (diseases == Diseases.all_cause_dementia) ? Math.min(total_mmet, 7.5) : total_mmet
+            );
             relativeRisksByDisease.put(diseases, (float) rr);
         }
-
 
         return relativeRisksByDisease;
     }
