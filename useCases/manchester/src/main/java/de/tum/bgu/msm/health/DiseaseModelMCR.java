@@ -145,13 +145,31 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                 // Effects of exposures
                 double sickProb = 0;
 
+
                 if (adjustByRelativeRisk) {
-                    for (HealthExposures exposures : HealthExposures.values()) {
-                        sickRate *= ((PersonHealth) person).getRelativeRisksByDisease().get(exposures).getOrDefault(diseases, 1.f);
+                    boolean applyAdjustment = true;
+
+                    // Limit dementia adjustment to ages > 60
+                    if (((PersonHealth) person).getCurrentDisease().contains(Diseases.all_cause_dementia)
+                            && person.getAge() < 60) {
+                        applyAdjustment = false;
+                    }
+
+                    // Limit coronary heart disease adjustment to ages > 40
+                    if (((PersonHealth) person).getCurrentDisease().contains(Diseases.coronary_heart_disease)
+                            && person.getAge() < 40) {
+                        applyAdjustment = false;
+                    }
+
+                    if (applyAdjustment) {
+                        for (HealthExposures exposures : HealthExposures.values()) {
+                            sickRate *= ((PersonHealth) person)
+                                    .getRelativeRisksByDisease()
+                                    .get(exposures)
+                                    .getOrDefault(diseases, 1.f);
+                        }
                     }
                 }
-
-
 
                 // Disease interactions effects (diabetes on coronary heart disease/stroke)
                 if (((PersonHealth) person).getCurrentDisease().contains(Diseases.diabetes)) {
