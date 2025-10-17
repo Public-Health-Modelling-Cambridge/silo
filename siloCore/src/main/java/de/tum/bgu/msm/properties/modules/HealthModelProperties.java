@@ -51,7 +51,7 @@ public class HealthModelProperties {
 
         truck_plan_file = PropertiesUtil.getStringProperty(bundle, "truck.plan", "input/freight/truck_plans.xml");
 
-        throughTraffic_plan_file = PropertiesUtil.getStringProperty(bundle, "throughTraffic.plan", "iinput/freight/throughTraffic_plans.xml");
+        throughTraffic_plan_file = PropertiesUtil.getStringProperty(bundle, "throughTraffic.plan", "input/freight/throughTraffic_plans.xml");
 
         matsim_scale_factor_car = PropertiesUtil.getDoubleProperty(bundle, "matsim.scale.factor.car", 0.1);
 
