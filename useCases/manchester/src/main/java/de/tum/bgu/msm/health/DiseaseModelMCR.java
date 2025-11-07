@@ -148,9 +148,8 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                 // Cleaner code - optimised by Ismail
                 if (adjustByRelativeRisk) {
                     boolean hasDementia = ((PersonHealth) person).getCurrentDisease().contains(Diseases.all_cause_dementia);
-                    boolean hasCHD = ((PersonHealth) person).getCurrentDisease().contains(Diseases.coronary_heart_disease);
 
-                    if (!(hasDementia && person.getAge() < 60) && !(hasCHD && person.getAge() < 40)) {
+                    if (!(hasDementia && person.getAge() < 60)) {
                         for (HealthExposures exposures : HealthExposures.values()) {
                             sickRate *= ((PersonHealth) person)
                                     .getRelativeRisksByDisease()
