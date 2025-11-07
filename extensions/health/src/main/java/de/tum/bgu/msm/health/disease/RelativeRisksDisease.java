@@ -13,29 +13,36 @@ public class RelativeRisksDisease {
 
     public static EnumMap<Diseases, Float> calculateForPA(PersonHealth personHealth, DataContainerHealth dataContainer) {
 
-        double total_mmet = Math.min(17.5, personHealth.getWeeklyMarginalMetHours(Mode.walk) +
-                personHealth.getWeeklyMarginalMetHours(Mode.bicycle) +
-                personHealth.getWeeklyMarginalMetHoursSport());
+        double total_mmet = personHealth.getWeeklyMarginalMetHours(Mode.walk)
+                + personHealth.getWeeklyMarginalMetHours(Mode.bicycle)
+                + personHealth.getWeeklyMarginalMetHoursSport();
 
         EnumMap<Diseases, Float> relativeRisksByDisease = new EnumMap<>(Diseases.class);
-
         for(Diseases diseases : dataContainer.getDoseResponseData().get(HealthExposures.PHYSICAL_ACTIVITY).keySet()){
             TableDataSet doseResponseTable = dataContainer.getDoseResponseData().get(HealthExposures.PHYSICAL_ACTIVITY).get(diseases);
-            if(doseResponseTable==null){
+            if(doseResponseTable == null){
                 System.out.println("No dose response data for PA, disease: " + diseases.name());
                 continue;
             }
-            // Put a hard cut of 7.5 for all_cause_dementia, and keep 17.5 for the rest
-            // related issue: https://github.com/Public-Health-Modelling-Cambridge/silo/issues/16
+
+            double cap = switch (diseases) {
+                case all_cause_mortality -> 21.865; // ref: https://github.com/Public-Health-Modelling-Cambridge/silo/issues/25
+                case all_cause_dementia -> 7.5; // ref: https://github.com/Public-Health-Modelling-Cambridge/silo/issues/16#issuecomment-3406186533
+                case diabetes -> total_mmet; // no cap for 'diabetes' (ref: https://github.com/Public-Health-Modelling-Cambridge/silo/issues/27)
+                default -> 17.5; // set default cap at 17.5 mmets hours per week for the rest
+            };
+
             double rr = LinearInterpolation.interpolate(
                     doseResponseTable.getColumnAsDouble("dose"),
                     doseResponseTable.getColumnAsDouble("RR"),
-                    (diseases == Diseases.all_cause_dementia) ? Math.min(total_mmet, 7.5) : total_mmet
+                    Math.min(cap, total_mmet)
             );
+
             relativeRisksByDisease.put(diseases, (float) rr);
         }
-
         return relativeRisksByDisease;
+
+
     }
 
     public static EnumMap<Diseases, Float> calculateForPM25(PersonHealth personMRC, DataContainerHealth dataContainer) {
