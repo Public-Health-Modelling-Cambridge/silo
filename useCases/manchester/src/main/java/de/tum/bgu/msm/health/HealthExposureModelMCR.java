@@ -1451,7 +1451,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                     // Green ndvi
                     ndviExposure += activityLocation.getNdvi() * remainingHour;
                 }else{
-                    logger.warn("No receiver point info found for rpId: " + rpId + " personId: " + person.getId());
+                    //logger.warn("No receiver point info found for rpId: " + rpId + " personId: " + person.getId());
                 }
             }
 
@@ -1813,7 +1813,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                         // Green ndvi
                         ndviExposure += activityLocation.getNdvi();
                     } else {
-                        logger.warn("No receiver point info found for rpId: " + rpId + " personId: " + person.getId());
+                        //logger.warn("No receiver point info found for rpId: " + rpId + " personId: " + person.getId());
                     }
                 }
 
