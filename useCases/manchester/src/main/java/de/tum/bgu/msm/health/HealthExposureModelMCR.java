@@ -1380,7 +1380,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                 activityGreenExposure += activityLocation.getNdvi() * durationInThisHour;
 
             }else{
-                logger.warn("No receiver point info found for rpId: " + rpId + " tripId: " + trip.getTripId());
+                //logger.warn("No receiver point info found for rpId: " + rpId + " tripId: " + trip.getTripId());
             }
 
             currentDayHour = nextDayHour;
