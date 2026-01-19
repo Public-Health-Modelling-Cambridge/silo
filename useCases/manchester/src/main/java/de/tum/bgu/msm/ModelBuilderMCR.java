@@ -125,7 +125,7 @@ public class ModelBuilderMCR {
 
         //modelContainer.registerModelUpdateListener(new AccidentModelMCR(dataContainer, properties, SiloUtil.provideNewRandom()));
 
-        //modelContainer.registerModelUpdateListener(new HealthExposureModelMCR(dataContainer, properties, SiloUtil.provideNewRandom(),config));
+        modelContainer.registerModelUpdateListener(new HealthExposureModelMCR(dataContainer, properties, SiloUtil.provideNewRandom(),config));
 
         //modelContainer.registerModelUpdateListener(new DiseaseModelMCR(dataContainer, properties, SiloUtil.provideNewRandom()));
 
