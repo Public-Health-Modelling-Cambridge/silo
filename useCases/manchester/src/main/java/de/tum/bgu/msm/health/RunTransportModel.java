@@ -47,6 +47,7 @@ public class RunTransportModel {
 
         // run
         transportModel.endYear(2021);
+
         //dataContainer.endSimulation();
         logger.info("Finished transport model for the Greater Manchester.");
     }
