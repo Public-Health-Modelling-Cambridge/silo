@@ -29,7 +29,9 @@ import org.matsim.core.scenario.ScenarioUtils;
 
 import de.tum.bgu.msm.container.DataContainer;
 import de.tum.bgu.msm.data.Day;
+import de.tum.bgu.msm.data.MitoGender;
 import de.tum.bgu.msm.data.Mode;
+import de.tum.bgu.msm.data.Purpose;
 import de.tum.bgu.msm.data.dwelling.Dwelling;
 import de.tum.bgu.msm.data.household.Household;
 import de.tum.bgu.msm.data.household.HouseholdUtil;
@@ -46,7 +48,7 @@ public class SimpleMatsimScenarioAssembler implements MatsimScenarioAssembler {
     private final static Logger logger = LogManager.getLogger(SimpleMatsimScenarioAssembler.class);
     private final DataContainer dataContainer;
     private final Properties properties;
-    //    private final boolean newRandomSeed = false;
+//    private final boolean newRandomSeed = false;
     private final Random random;
 
     public SimpleMatsimScenarioAssembler(DataContainer dataContainer, Properties properties) {
@@ -56,9 +58,9 @@ public class SimpleMatsimScenarioAssembler implements MatsimScenarioAssembler {
 //        if ( newRandomSeed ){
 //            this.random = MatsimRandom.getLocalInstance();
 //        } else{
-        this.random = SiloUtil.getRandomObject();
-        logger.warn("using random number sequence from silo.  for fabiland, this made regression tests non-deterministic.  Here, it seems to work, " +
-                "thus leaving it the way it is.  kai, jun'23");
+            this.random = SiloUtil.getRandomObject();
+            logger.warn("using random number sequence from silo.  for fabiland, this made regression tests non-deterministic.  Here, it seems to work, " +
+                                        "thus leaving it the way it is.  kai, jun'23");
 //        }
     }
 
@@ -165,7 +167,7 @@ public class SimpleMatsimScenarioAssembler implements MatsimScenarioAssembler {
         File tripsFile = new File(tripsPath);
         if (tripsFile.exists()) {
             Map<Integer, TripRecord> mitoTripsAll = readTrips(tripsPath);
-
+            
             // Group persons by day (following MITO_MATSIM pattern)
             logger.info("  Receiving demand from trips CSV");
             Map<Day, Population> populationByDay = new HashMap<>();
@@ -181,6 +183,23 @@ public class SimpleMatsimScenarioAssembler implements MatsimScenarioAssembler {
 
                 String personId = "trip_" + t.getTripId();
                 org.matsim.api.core.v01.population.Person matsimPerson = pf.createPerson(Id.createPersonId(personId));
+                
+                // Set person attributes required by runBikePedSimulation
+                if (t.getPersonId() > 0) {
+                    Person siloPerson = dataContainer.getHouseholdDataManager().getPersonFromId(t.getPersonId());
+                    if (siloPerson != null) {
+                        matsimPerson.getAttributes().putAttribute("age", siloPerson.getAge());
+                        matsimPerson.getAttributes().putAttribute("sex", MitoGender.valueOf(siloPerson.getGender().toString()));
+                    }
+                }
+                if (t.purpose != null) {
+                    try {
+                        matsimPerson.getAttributes().putAttribute("purpose", Purpose.valueOf(t.purpose));
+                    } catch (IllegalArgumentException e) {
+                        logger.warn("Unknown purpose: " + t.purpose);
+                    }
+                }
+                
                 populationByDay.get(day).addPerson(matsimPerson);
 
                 Plan plan = pf.createPlan();
@@ -209,6 +228,9 @@ public class SimpleMatsimScenarioAssembler implements MatsimScenarioAssembler {
                 } catch (Exception e) {
                     mode = TransportMode.car;
                 }
+                
+                // Store mode in person attributes for runBikePedSimulation
+                matsimPerson.getAttributes().putAttribute("mode", mode);
 
                 plan.addLeg(pf.createLeg(mode));
 
@@ -223,7 +245,7 @@ public class SimpleMatsimScenarioAssembler implements MatsimScenarioAssembler {
             for (Day day : Day.values()) {
                 Population population = populationByDay.get(day);
                 if (population == null) continue; // skip days with no trips
-
+                
                 Config config = ConfigUtils.loadConfig(initialMatsimConfig.getContext());
                 setDemandSpecificConfigSettings(config);
                 MutableScenario scenario = (MutableScenario) ScenarioUtils.loadScenario(config);
@@ -254,6 +276,7 @@ public class SimpleMatsimScenarioAssembler implements MatsimScenarioAssembler {
             String[] header = recString.split(",");
             int posId = SiloUtil.findPositionInArray("t.id", header);
             int posPurpose = SiloUtil.findPositionInArray("t.purpose", header);
+            int posPersonId = SiloUtil.findPositionInArray("p.ID", header);
             int posOriginX = SiloUtil.findPositionInArray("originX", header);
             int posOriginY = SiloUtil.findPositionInArray("originY", header);
             int posDestinationX = SiloUtil.findPositionInArray("destinationX", header);
@@ -270,6 +293,7 @@ public class SimpleMatsimScenarioAssembler implements MatsimScenarioAssembler {
                     int id = Integer.parseInt(e[posId]);
                     TripRecord tr = new TripRecord(id);
                     if (posPurpose >= 0) tr.purpose = e[posPurpose];
+                    if (posPersonId >= 0) tr.personId = Integer.parseInt(e[posPersonId]);
                     if (posOriginX >= 0 && posOriginY >= 0 && !e[posOriginX].equals("null") && !e[posOriginY].equals("null")) {
                         tr.origin = new Coord(Double.parseDouble(e[posOriginX]), Double.parseDouble(e[posOriginY]));
                     }
@@ -297,6 +321,7 @@ public class SimpleMatsimScenarioAssembler implements MatsimScenarioAssembler {
 
     private static class TripRecord {
         final int id;
+        int personId = -1;
         String purpose;
         Coord origin;
         Coord destination;
@@ -308,6 +333,7 @@ public class SimpleMatsimScenarioAssembler implements MatsimScenarioAssembler {
         TripRecord(int id) { this.id = id; }
 
         int getTripId() { return id; }
+        int getPersonId() { return personId; }
         Day getDepartureDay() { return day; }
         Coord getTripOrigin() { return origin; }
         Coord getTripDestination() { return destination; }
