@@ -36,7 +36,9 @@ public class SportPAModelMCR extends AbstractModel implements ModelUpdateListene
     @Override
     public void endYear(int year) {
         logger.warn("Sport Physical Activity end year:" + year);
-        updateSportPA();
+        if(properties.healthData.exposureModelYears.contains(year)){
+            updateSportPA();
+        }
     }
 
     @Override
