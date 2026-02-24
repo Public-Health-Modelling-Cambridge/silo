@@ -166,6 +166,7 @@ public class SimpleMatsimScenarioAssembler implements MatsimScenarioAssembler {
         String tripsPath = properties.main.baseDirectory + "scenOutput/" + properties.main.scenarioName + "/" + year + "/microData/trips.csv";
         File tripsFile = new File(tripsPath);
         if (tripsFile.exists()) {
+            double populationScalingFactor = properties.transportModel.matsimScaleFactor;
             Map<Integer, TripRecord> mitoTripsAll = readTrips(tripsPath);
             
             // Group persons by day (following MITO_MATSIM pattern)
@@ -175,6 +176,10 @@ public class SimpleMatsimScenarioAssembler implements MatsimScenarioAssembler {
 
             for (TripRecord t : mitoTripsAll.values()) {
                 if (t.getDepartureDay() == null || t.getTripOrigin() == null || t.getTripDestination() == null) continue;
+
+                if (random.nextDouble() > populationScalingFactor) {
+                    continue;
+                }
 
                 Day day = t.getDepartureDay();
                 if (populationByDay.get(day) == null) {
