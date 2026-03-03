@@ -65,7 +65,7 @@ public class HealthSurveyTableReader {
                     double totalPa  = Double.parseDouble(cols[totalPaIdx].trim());
 
                     String key = ageGroup + "|" + gender.toUpperCase() + "|" + imd;
-                    System.out.println("reading key: " + key + "with totalPA " + totalPa);
+                    //System.out.println("reading key: " + key + "with totalPA " + totalPa);
                     paDistributionByStrata
                             .computeIfAbsent(key, k -> new ArrayList<>())
                             .add(totalPa);
