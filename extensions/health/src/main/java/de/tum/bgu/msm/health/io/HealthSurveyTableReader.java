@@ -71,55 +71,6 @@ public class HealthSurveyTableReader {
                             .add(totalPa);
                 }
 
-
-
-            /*
-
-            BufferedReader in = new BufferedReader(new FileReader(path));
-            recString = in.readLine();
-
-            // read header
-            String[] header = recString.split(",");
-
-            //id gender age_group time_totalpa imd total_PA
-            int posID = SiloUtil.findPositionInArray("id", header);
-            int posGender = SiloUtil.findPositionInArray("gender", header);
-            int posAgeGroup = SiloUtil.findPositionInArray("age_group", header);
-            int posTotalPATime = SiloUtil.findPositionInArray("time_totalpa", header);
-            int posIMD = SiloUtil.findPositionInArray("imd", header);
-            int posTotalPA = SiloUtil.findPositionInArray("total_PA", header);
-
-            // read line
-            while ((recString = in.readLine()) != null) {
-                recCount++;
-                String[] lineElements = recString.split(",");
-                int id = Integer.parseInt(lineElements[posID]);
-                String gender = lineElements[posGender];
-                int imd = Integer.parseInt(lineElements[posIMD]);
-                String ageGroup = lineElements[posAgeGroup];
-                double totalPA = Double.parseDouble(lineElements[posTotalPA]);
-
-                //String compositeKey = dataContainer.createHealthSurveyIndex(ageGroup, gender,imd);
-
-                //healthDiseaseData.computeIfAbsent(id, k -> new HashMap<>()).put(compositeKey, totalPA);
-
-                String compositeKey = ageGroup + "|" + gender + "|" + imd;
-                healthSurveyData
-                        .computeIfAbsent(key, new Function<Diseases, Map<String, Double>>() {
-                            @Override
-                            public Map<String, Double> apply(Diseases compositeKey) {
-                                Map<String, Double> stringDoubleMap = new Map<>();
-                                return
-                                        stringDoubleMap;
-                            }
-                        })
-                        .add(totalPA);
-
-            }
-
-        */
-
-
         } catch (IOException e) {
             logger.fatal("IO Exception caught reading health survey england data file: " + path);
             logger.fatal("recCount = " + recCount + ", recString = <" + recString + ">");
@@ -130,12 +81,5 @@ public class HealthSurveyTableReader {
 
         return paDistributionByStrata;
 
-        /*
-           // Create a global distribution fallback
-            return paDistributionByStrata.values().stream()
-                    .flatMap(List::stream)
-                    .toList();
-
-         */
     }
 }

@@ -46,89 +46,6 @@ public class SportPAModelMCR extends AbstractModel implements ModelUpdateListene
     }
 
     public void updateSportPA() {
-        Map<String, List<Double>> paDistributionByStrata = new HashMap<>();
-        /*
-        // Pre-group df_B-style source data: here assumed to be derived from dataContainer
-        Map<String, List<Double>> paDistributionByStrata = new HashMap<>();
-
-        // Build a lookup of total_PA by (age_group | gender | imd) from the reference population (df_B)
-        for (Person person : dataContainer.getHouseholdDataManager().getPersons()) {
-            PersonHealthMCR ph = (PersonHealthMCR) person;
-            int zoneId = dataContainer.getRealEstateDataManager()
-                    .getDwelling(person.getHousehold().getDwellingId())
-                    .getZoneId();
-            ZoneMCR zone = (ZoneMCR) dataContainer.getGeoData().getZones().get(zoneId);
-
-            String key = buildKey(person.getAge(), person.getGender(), zone.getImd10());
-            paDistributionByStrata
-                    .computeIfAbsent(key, k -> new ArrayList<>())
-                    .add((double) (ph.getWeeklyMarginalMetHours(Mode.walk) + ph.getWeeklyMarginalMetHours(Mode.bicycle))
-            );
-        }*/
-
-/*
-        // Pre-group df_B-style source data: read directly from CSV file
-        Map<String, List<Double>> paDistributionByStrata = new HashMap<>();
-
-        String csvFilePath = "/media/ali/Expansion/backup_tabea/Ali/manchester/input/health/HSE/processed_hse.csv";
-
-        try (BufferedReader br = new BufferedReader(new FileReader(csvFilePath))) {
-            String headerLine = br.readLine(); // skip header row
-
-            if (headerLine == null) {
-                throw new IllegalStateException("CSV file is empty: " + csvFilePath);
-            }
-
-            // Parse header to find column indices dynamically
-            String[] headers = headerLine.split(",");
-            int ageGroupIdx = -1;
-            int genderIdx   = -1;
-            int imdIdx      = -1;
-            int totalPaIdx  = -1;
-
-            for (int i = 0; i < headers.length; i++) {
-                switch (headers[i].trim().toLowerCase()) {
-                    case "age_group"  -> ageGroupIdx = i;
-                    case "gender"     -> genderIdx   = i;
-                    case "imd"        -> imdIdx       = i;
-                    case "total_pa"   -> totalPaIdx   = i;
-                }
-            }
-
-            if (ageGroupIdx < 0 || genderIdx < 0 || imdIdx < 0 || totalPaIdx < 0) {
-                throw new IllegalStateException(
-                        "CSV is missing one or more required columns: age_group, gender, imd, total_pa"
-                );
-            }
-
-            String line;
-            while ((line = br.readLine()) != null) {
-                if (line.isBlank()) continue;
-
-                String[] cols = line.split(",");
-
-                String ageGroup = cols[ageGroupIdx].trim();
-                String gender   = cols[genderIdx].trim();
-                String imd      = cols[imdIdx].trim();
-                double totalPa  = Double.parseDouble(cols[totalPaIdx].trim());
-
-                String key = ageGroup + "|" + gender + "|" + imd;
-                paDistributionByStrata
-                        .computeIfAbsent(key, k -> new ArrayList<>())
-                        .add(totalPa);
-            }
-
-        } catch (IOException e) {
-            throw new UncheckedIOException("Failed to read reference population CSV: " + csvFilePath, e);
-        }
-
-        // Create a global distribution fallback
-        List<Double> globalPADistribution = paDistributionByStrata.values().stream()
-                .flatMap(List::stream)
-                .toList();
-*/
-
-
         Map<String, List<Double>> globalPADistribution = dataContainer.getHealthSurveyDataManager();
         Random random = new Random();
 
@@ -146,7 +63,6 @@ public class SportPAModelMCR extends AbstractModel implements ModelUpdateListene
             ZoneMCR zone = (ZoneMCR) dataContainer.getGeoData().getZones().get(zoneId);
 
             String key = buildKey(person.getAge(), person.getGender(), zone.getImd10());
-            //String key = ageGroup + "|" + gender + "|" + imd;
 
             List<Double> matches = globalPADistribution.get(key);
 
@@ -161,12 +77,9 @@ public class SportPAModelMCR extends AbstractModel implements ModelUpdateListene
             double travelPA = personHealth.getWeeklyMarginalMetHours(Mode.walk)
                     + personHealth.getWeeklyMarginalMetHours(Mode.bicycle);
             double sportPA = Math.max(totalPA - travelPA, 0.0);
-            System.out.println(sportPA + " for key " + key);
+            //System.out.println(sportPA + " for key " + key);
             personHealth.setWeeklyMarginalMetHoursSport((float) sportPA);
         }
-
-        System.out.println(" --------------- ");
-        System.out.println("We are done");
 
     }
 
@@ -192,27 +105,6 @@ public class SportPAModelMCR extends AbstractModel implements ModelUpdateListene
         int idx = random.nextInt(values.size());  // 0 .. size-1
         return values.get(idx);
     }
-
-
-    /*
-    private static double sample(@MonotonicNonNull Map<String, List<Double>> values, Random random) {
-        if (values == null || values.isEmpty()) {
-            throw new IllegalArgumentException("Map of values cannot be null or empty.");
-        }
-
-        // Pick a random list
-        var lists = new ArrayList<>(values.values());
-        var chosenList = lists.get(random.nextInt(lists.size()));
-
-        if (chosenList == null || chosenList.isEmpty()) {
-            throw new IllegalArgumentException("Chosen list is null or empty.");
-        }
-
-        // Pick a random double from that list
-        return chosenList.get(random.nextInt(chosenList.size()));
-    }
-
-     */
 
 
 }
