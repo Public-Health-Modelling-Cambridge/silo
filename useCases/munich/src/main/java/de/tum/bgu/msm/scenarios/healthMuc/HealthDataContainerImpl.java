@@ -55,6 +55,11 @@ public class HealthDataContainerImpl implements DataContainerWithSchools, DataCo
     }
 
     @Override
+    public Map<String, List<Double>> getHealthSurveyDataManager() {
+        return delegate.getHealthSurveyDataManager();
+    }
+
+    @Override
     public RealEstateDataManager getRealEstateDataManager() {
         return delegate.getRealEstateDataManager();
     }
@@ -207,6 +212,14 @@ public class HealthDataContainerImpl implements DataContainerWithSchools, DataCo
 
     @Override
     public String createTransitionLookupIndex(int age, Gender gender, String location) {
+        return "";
+    }
+
+    public String createHealthSurveyIndex() {
+        return createHealthSurveyIndex(null, null, 0);
+    }
+
+    public String createHealthSurveyIndex(String ageGroup, String gender, int imd) {
         return "";
     }
 }

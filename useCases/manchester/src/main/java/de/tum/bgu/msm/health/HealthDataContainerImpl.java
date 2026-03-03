@@ -42,6 +42,7 @@ public class HealthDataContainerImpl implements DataContainerWithSchools, DataCo
     private Set<Pollutant> pollutantSet = new HashSet<>();
     private EnumMap<Mode, EnumMap<MitoGender,Map<Integer,Double>>> avgSpeeds;
     private EnumMap<Diseases, Map<String, Double>> healthTransitionData;
+    private Map<String, List<Double>> healthSurveyData;
     private EnumMap<HealthExposures, EnumMap<Diseases, TableDataSet>> doseResponseData;
     private Map<Integer, Map<Integer, List<String>>> healthDiseaseTrackerRemovedPerson = new HashMap<>();
     private Map<Integer, List<Diseases>> healthPrevalenceData;
@@ -62,6 +63,11 @@ public class HealthDataContainerImpl implements DataContainerWithSchools, DataCo
     @Override
     public HouseholdDataManager getHouseholdDataManager() {
         return delegate.getHouseholdDataManager();
+    }
+
+    @Override
+    public Map<String, List<Double>> getHealthSurveyDataManager() {
+        return healthSurveyData;
     }
 
     @Override
@@ -266,6 +272,13 @@ public class HealthDataContainerImpl implements DataContainerWithSchools, DataCo
         return healthDiseaseTrackerRemovedPerson;
     }
 
+    public Map<String, List<Double>> getHealthSurveyData() {
+        return this.healthSurveyData;
+    }
+    public void setHealthSurveyData(Map<String, List<Double>> healthSurveyData) {
+        this.healthSurveyData = healthSurveyData;
+    }
+
     @Override
     public EnumMap<Diseases, Map<String, Double>> getHealthTransitionData() {
         return healthTransitionData;
@@ -279,6 +292,14 @@ public class HealthDataContainerImpl implements DataContainerWithSchools, DataCo
     public String createTransitionLookupIndex(int age, Gender gender, String location) {
         StringBuilder key = new StringBuilder();
         key.append(age).append("|").append(gender.name().toLowerCase()).append("|").append(location);
+        return key.toString();
+    }
+
+
+    @Override
+    public String createHealthSurveyIndex(String ageGroup, String gender, int imd) {
+        StringBuilder key = new StringBuilder();
+        key.append(ageGroup).append("|").append(gender).append("|").append(imd);
         return key.toString();
     }
 }
