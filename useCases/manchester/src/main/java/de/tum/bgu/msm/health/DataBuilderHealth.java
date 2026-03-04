@@ -162,7 +162,7 @@ public class DataBuilderHealth {
 
         dataContainer.setAvgSpeeds(new DefaultSpeedReader().readData(properties.main.baseDirectory + properties.healthData.avgSpeedFile));
         dataContainer.setHealthTransitionData(new HealthTransitionTableReader().readData(dataContainer,properties.main.baseDirectory + properties.healthData.healthTransitionData));
-        dataContainer.setHealthSurveyData((Map<String, List<Double>>) new HealthSurveyTableReader().readData(dataContainer,properties.main.baseDirectory + properties.healthData.healthSurveyData));
+        dataContainer.setHealthSurveyData(new HealthSurveyTableReader().readData(dataContainer,properties.main.baseDirectory + properties.healthData.healthSurveyData));
         DoseResponseLookupReader doseResponseReader = new DoseResponseLookupReader();
         doseResponseReader.readData(properties.main.baseDirectory + properties.healthData.basePath);
         dataContainer.setDoseResponseData(doseResponseReader.getDoseResponseData());

@@ -57,12 +57,17 @@ public class HealthSurveyTableReader {
                 while ((line = br.readLine()) != null) {
                     if (line.isBlank()) continue;
 
+                    recCount++;
+                    recString = line;
+                    System.out.println("DEBUG Reading line #" + recCount + ": " + line);
+
                     String[] cols = line.split(",");
 
                     String ageGroup = cols[ageGroupIdx].trim();
                     String gender   = cols[genderIdx].trim();
                     String imd      = cols[imdIdx].trim();
                     double totalPa  = Double.parseDouble(cols[totalPaIdx].trim());
+                    System.out.println("DEBUG Parsed key: " + key + " | total_PA: " + totalPa);
 
                     String key = ageGroup + "|" + gender.toUpperCase() + "|" + imd;
                     //System.out.println("reading key: " + key + "with totalPA " + totalPa);
@@ -72,8 +77,8 @@ public class HealthSurveyTableReader {
                 }
 
         } catch (IOException e) {
-            logger.fatal("IO Exception caught reading health survey england data file: " + path);
-            logger.fatal("recCount = " + recCount + ", recString = <" + recString + ">");
+               logger.fatal("IO Exception", e);
+               e.printStackTrace();
         } catch (IllegalArgumentException e){
             logger.warn(e.getMessage());
         }
