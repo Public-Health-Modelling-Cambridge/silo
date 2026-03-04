@@ -46,7 +46,7 @@ public class SportPAModelMCR extends AbstractModel implements ModelUpdateListene
     }
 
     public void updateSportPA() {
-        Map<String, List<Double>> globalPADistribution = dataContainer.getHealthSurveyDataManager();
+        Map<String, List<Double>> globalPADistribution = ((HealthDataContainerImpl) dataContainer).getHealthSurveyData();
         Random random = new Random();
 
         List<Double> globalValues = new ArrayList<>();
@@ -105,6 +105,4 @@ public class SportPAModelMCR extends AbstractModel implements ModelUpdateListene
         int idx = random.nextInt(values.size());  // 0 .. size-1
         return values.get(idx);
     }
-
-
 }

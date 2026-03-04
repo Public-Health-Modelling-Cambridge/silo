@@ -19,7 +19,7 @@ public interface DataContainer extends UpdateListener {
 
     HouseholdDataManager getHouseholdDataManager();
 
-    Map<String, List<Double>> getHealthSurveyDataManager();
+    // Map<String, List<Double>> getHealthSurveyDataManager();
 
     RealEstateDataManager getRealEstateDataManager();
 

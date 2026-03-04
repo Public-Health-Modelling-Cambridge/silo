@@ -66,11 +66,6 @@ public class HealthDataContainerImpl implements DataContainerWithSchools, DataCo
     }
 
     @Override
-    public Map<String, List<Double>> getHealthSurveyDataManager() {
-        return healthSurveyData;
-    }
-
-    @Override
     public RealEstateDataManager getRealEstateDataManager() {
         return delegate.getRealEstateDataManager();
     }
@@ -275,6 +270,7 @@ public class HealthDataContainerImpl implements DataContainerWithSchools, DataCo
     public Map<String, List<Double>> getHealthSurveyData() {
         return this.healthSurveyData;
     }
+
     public void setHealthSurveyData(Map<String, List<Double>> healthSurveyData) {
         this.healthSurveyData = healthSurveyData;
     }
@@ -292,14 +288,6 @@ public class HealthDataContainerImpl implements DataContainerWithSchools, DataCo
     public String createTransitionLookupIndex(int age, Gender gender, String location) {
         StringBuilder key = new StringBuilder();
         key.append(age).append("|").append(gender.name().toLowerCase()).append("|").append(location);
-        return key.toString();
-    }
-
-
-    @Override
-    public String createHealthSurveyIndex(String ageGroup, String gender, int imd) {
-        StringBuilder key = new StringBuilder();
-        key.append(ageGroup).append("|").append(gender).append("|").append(imd);
         return key.toString();
     }
 }
