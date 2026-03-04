@@ -56,11 +56,6 @@ public class DefaultDataContainer implements DataContainer {
     }
 
     @Override
-    public Map<String, List<Double>> getHealthSurveyDataManager() {
-        return Map.of();
-    }
-
-    @Override
     public RealEstateDataManager getRealEstateDataManager() {
         return realEstateDataManager;
     }
