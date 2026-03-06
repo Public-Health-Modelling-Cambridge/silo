@@ -67,7 +67,7 @@ public class HealthSurveyTableReader {
                     String gender   = cols[genderIdx].trim();
                     String imd      = cols[imdIdx].trim();
                     double totalPa  = Double.parseDouble(cols[totalPaIdx].trim());
-                    System.out.println("DEBUG Parsed key: " + key + " | total_PA: " + totalPa);
+                    //System.out.println("DEBUG Parsed key: " + key + " | total_PA: " + totalPa);
 
                     String key = ageGroup + "|" + gender.toUpperCase() + "|" + imd;
                     //System.out.println("reading key: " + key + "with totalPA " + totalPa);
