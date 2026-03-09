@@ -14,6 +14,8 @@ import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 
 import java.util.*;
+import java.util.stream.DoubleStream;
+import java.util.stream.Stream;
 
 public class SportPAModelMCR extends AbstractModel implements ModelUpdateListener {
     private static final Logger logger = LogManager.getLogger(SportPAModelMCR.class);
@@ -36,7 +38,7 @@ public class SportPAModelMCR extends AbstractModel implements ModelUpdateListene
     @Override
     public void endYear(int year) {
         logger.warn("Sport Physical Activity end year:" + year);
-        if (year == properties.main.startYear || properties.healthData.exposureModelYears.contains(year)) {
+        if (year == properties.main.startYear || (properties.healthData.exposureModelYears.contains(year))) {
             updateSportPA();
         }
     }
@@ -53,6 +55,8 @@ public class SportPAModelMCR extends AbstractModel implements ModelUpdateListene
         for (List<Double> list : globalPADistribution.values()) {
             globalValues.addAll(list);
         }
+
+        Map<Integer, List<Float>> totalPAList = new HashMap<>();
 
         // Now assign sport PA for each person in df_A (simulation persons)
         for (Person person : dataContainer.getHouseholdDataManager().getPersons()) {
@@ -79,8 +83,72 @@ public class SportPAModelMCR extends AbstractModel implements ModelUpdateListene
             double sportPA = Math.max(totalPA - travelPA, 0.0);
             //System.out.println(sportPA + " for key " + key);
             personHealth.setWeeklyMarginalMetHoursSport((float) sportPA);
+
+            /*if (key.equals("16-24|FEMALE|1")){
+                totalPAList.put(personHealth.getId(), Arrays.asList((float) personHealth.getWeeklyMarginalMetHours(Mode.walk),
+                        (float) personHealth.getWeeklyMarginalMetHours(Mode.bicycle),
+                        (float) personHealth.getWeeklyMarginalMetHoursSport()));
+                //sportsPAList.put(personHealth.getId(), sportPA);
+                System.out.println("---");
+            }*/
         }
 
+        /*List<Float> sortedStream = totalPAList.values().stream()
+                .filter(list -> list != null && !list.isEmpty())
+                .map(list -> list.get(0))
+                .sorted()
+                .toList();   // Java 16+; use collect(...) on older versions
+
+        int n = sortedStream.size();
+
+        double median_walk = (n % 2 == 0)
+                ? (double) sortedStream.get(n / 2)
+                : (sortedStream.get(n / 2 - 1) + sortedStream.get(n / 2)) / 2.0;
+
+
+        sortedStream = totalPAList.values().stream()
+                .filter(list -> list != null && !list.isEmpty())
+                .map(list -> list.get(1))
+                .sorted()
+                .toList();   // Java 16+; use collect(...) on older versions
+
+        n = sortedStream.size();
+
+        double median_bike = (n % 2 == 0)
+                ? (double) sortedStream.get(n / 2)
+                : (sortedStream.get(n / 2 - 1) + sortedStream.get(n / 2)) / 2.0;
+
+        sortedStream = totalPAList.values().stream()
+                .filter(list -> list != null && !list.isEmpty())
+                .map(list -> list.get(2))
+                .sorted()
+                .toList();   // Java 16+; use collect(...) on older versions
+
+        n = sortedStream.size();
+
+        double median_sports = (n % 2 == 0)
+                ? (double) sortedStream.get(n / 2)
+                : (sortedStream.get(n / 2 - 1) + sortedStream.get(n / 2)) / 2.0;
+
+        sortedStream = totalPAList.values().stream()
+                .filter(list -> list != null && !list.isEmpty())
+                .map(list -> (list.get(0) + list.get(1) + list.get(2)))
+                .sorted()
+                .toList();   // Java 16+; use collect(...) on older versions
+
+        n = sortedStream.size();
+
+        double median_total_pa = (n % 2 == 0)
+                ? (double) sortedStream.get(n / 2)
+                : (sortedStream.get(n / 2 - 1) + sortedStream.get(n / 2)) / 2.0;
+
+        System.out.println("16-24|FEMALE|1 with count " + n);
+        System.out.println("---");
+        System.out.println("median walk pa " + median_walk + "median bike pa " + median_bike + "median sports pa " + median_sports);
+        System.out.println("median total pa " + median_total_pa);
+        System.out.println("median total pa " + (median_walk + median_bike + median_sports));
+        System.out.println("---");
+        */
     }
 
     private static String buildKey(int age, Gender gender, double imd) {
