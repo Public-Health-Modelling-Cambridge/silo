@@ -53,19 +53,13 @@ public class RunAirPollutantModel {
         HealthDataContainerImpl dataContainer = DataBuilderHealth.getModelDataForManchester(properties, config);
         DataBuilderHealth.read(properties, dataContainer, config);
 
-        // setup
-        // scenOutput/base/matsim/2021/thursday/car/2021.output_events_emission.xml.gz
-        final String outputDirectoryRoot = properties.main.baseDirectory + "scenOutput/"
-                + properties.main.scenarioName + "/matsim/" + "2021" + "/" + "thursday" + "/";
+        // AP
+        AirPollutantModel airPollutantModel = new AirPollutantModel(dataContainer, properties, SiloUtil.provideNewRandom(), config);
+        airPollutantModel.endYear(2021);
 
-        config.controller().setOutputDirectory(outputDirectoryRoot);
-        config.controller().setRunId(String.valueOf(2021));
-
-        final MutableScenario scenario = ScenarioUtils.createMutableScenario(config);
-
-        //scenario.getConfig().controller().getOutputDirectory() + "/" + "thursday" + "/car/" + "2021" + ".output_events.xml.gz";
-
-        logger.warn(outputDirectoryRoot);
+        // Noise
+        //NoiseModel noiseModel = new NoiseModel(dataContainer, properties, SiloUtil.provideNewRandom(), config);
+        //noiseModel.endYear(2021);
 
         logger.info("Finished analysis.");
     }

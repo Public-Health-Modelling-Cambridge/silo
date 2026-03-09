@@ -209,4 +209,20 @@ public class HealthDataContainerImpl implements DataContainerWithSchools, DataCo
     public String createTransitionLookupIndex(int age, Gender gender, String location) {
         return "";
     }
+
+    @Override
+    public Map<String, List<Double>> getHealthSurveyData() {
+        return null; // todo: create placeholder and return it
+    }
+
+    /*
+    public String createHealthSurveyIndex() {
+        return createHealthSurveyIndex(null, null, 0);
+    }
+
+    public String createHealthSurveyIndex(String ageGroup, String gender, int imd) {
+        return "";
+    }
+
+     */
 }

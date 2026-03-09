@@ -44,6 +44,7 @@ public class HealthModelProperties {
     public final String ptBusTimeShareMatrix;
     public final double DEFAULT_ROAD_TRAFFIC_INCREMENTAL_PM25;
     public final double DEFAULT_ROAD_TRAFFIC_INCREMENTAL_NO2;
+    public String healthSurveyData;
 
 
     public HealthModelProperties(ResourceBundle bundle) {
@@ -88,6 +89,8 @@ public class HealthModelProperties {
         carShareInjuryDataFile = PropertiesUtil.getStringProperty(bundle, "car.share.injury.data.file", "input/accident/age_gender_driver_prob_base.csv");
 
         healthTransitionData = PropertiesUtil.getStringProperty(bundle, "health.transition.data", "input/health/health_transitions_manchester.csv");
+
+        healthSurveyData = PropertiesUtil.getStringProperty(bundle, "health.survey.data", "input/health/HSE/processed_hse.csv");
 
         adjustByRelativeRisk = PropertiesUtil.getBooleanProperty(bundle, "adjust.transition.byRelativeRisk", false);
 

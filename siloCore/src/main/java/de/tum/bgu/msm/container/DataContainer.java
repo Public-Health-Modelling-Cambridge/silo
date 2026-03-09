@@ -9,12 +9,17 @@ import de.tum.bgu.msm.data.job.JobDataManager;
 import de.tum.bgu.msm.data.travelTimes.TravelTimes;
 import de.tum.bgu.msm.simulator.UpdateListener;
 
+import java.util.List;
+import java.util.Map;
+
 /**
  * //TODO
  */
 public interface DataContainer extends UpdateListener {
 
     HouseholdDataManager getHouseholdDataManager();
+
+    // Map<String, List<Double>> getHealthSurveyDataManager();
 
     RealEstateDataManager getRealEstateDataManager();
 

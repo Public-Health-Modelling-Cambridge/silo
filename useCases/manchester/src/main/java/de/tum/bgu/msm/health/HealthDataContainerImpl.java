@@ -42,6 +42,7 @@ public class HealthDataContainerImpl implements DataContainerWithSchools, DataCo
     private Set<Pollutant> pollutantSet = new HashSet<>();
     private EnumMap<Mode, EnumMap<MitoGender,Map<Integer,Double>>> avgSpeeds;
     private EnumMap<Diseases, Map<String, Double>> healthTransitionData;
+    private Map<String, List<Double>> healthSurveyData;
     private EnumMap<HealthExposures, EnumMap<Diseases, TableDataSet>> doseResponseData;
     private Map<Integer, Map<Integer, List<String>>> healthDiseaseTrackerRemovedPerson = new HashMap<>();
     private Map<Integer, List<Diseases>> healthPrevalenceData;
@@ -264,6 +265,14 @@ public class HealthDataContainerImpl implements DataContainerWithSchools, DataCo
 
     public Map<Integer, Map<Integer, List<String>>> getHealthDiseaseTrackerRemovedPerson() {
         return healthDiseaseTrackerRemovedPerson;
+    }
+
+    public Map<String, List<Double>> getHealthSurveyData() {
+        return this.healthSurveyData;
+    }
+
+    public void setHealthSurveyData(Map<String, List<Double>> healthSurveyData) {
+        this.healthSurveyData = healthSurveyData;
     }
 
     @Override

@@ -30,6 +30,7 @@ import org.matsim.core.network.NetworkUtils;
 import org.matsim.core.scenario.ScenarioUtils;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class DataBuilderHealth {
@@ -161,6 +162,7 @@ public class DataBuilderHealth {
 
         dataContainer.setAvgSpeeds(new DefaultSpeedReader().readData(properties.main.baseDirectory + properties.healthData.avgSpeedFile));
         dataContainer.setHealthTransitionData(new HealthTransitionTableReader().readData(dataContainer,properties.main.baseDirectory + properties.healthData.healthTransitionData));
+        dataContainer.setHealthSurveyData(new HealthSurveyTableReader().readData(dataContainer,properties.main.baseDirectory + properties.healthData.healthSurveyData));
         DoseResponseLookupReader doseResponseReader = new DoseResponseLookupReader();
         doseResponseReader.readData(properties.main.baseDirectory + properties.healthData.basePath);
         dataContainer.setDoseResponseData(doseResponseReader.getDoseResponseData());

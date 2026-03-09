@@ -35,6 +35,7 @@ public final class Properties {
     public final GeoProperties geo;
     public final RealEstateProperties realEstate;
     public final HouseholdDataProperties householdData;
+    public final HouseholdDataProperties healthSurveyData;
     public final JobDataProperties jobData;
     public final EventRulesProperties eventRules;
     public final DemographicsProperties demographics;
@@ -73,6 +74,7 @@ public final class Properties {
         track = new TrackProperties(bundle);
         schoolData = new SchoolDataProperties(bundle);
         healthData = new HealthModelProperties(bundle);
+        healthSurveyData = new HouseholdDataProperties(bundle);
 
 
 

@@ -55,4 +55,9 @@ public interface DataContainerHealth extends DataContainer {
     void reset();
 
     String createTransitionLookupIndex(int age, Gender gender, String location);
+
+    //String createHealthSurveyIndex(String ageGroup, String gender, int imd);
+
+    Map<String, List<Double>> getHealthSurveyData();
+
 }
