@@ -70,17 +70,17 @@ public class SportPAModelMCR extends AbstractModel implements ModelUpdateListene
 
             List<Double> matches = globalPADistribution.get(key);
 
-            double totalPA;
+            double sportPA;
             if (matches == null || matches.isEmpty()) {
                 System.err.println("Warning: no match for stratum " + key + " – using global distribution.");
-                totalPA = sample(globalValues, random);
+                sportPA = sample(globalValues, random);
             } else {
-                totalPA = sample(matches, random);
+                sportPA = sample(matches, random);
             }
 
             double travelPA = personHealth.getWeeklyMarginalMetHours(Mode.walk)
                     + personHealth.getWeeklyMarginalMetHours(Mode.bicycle);
-            double sportPA = Math.max(totalPA - travelPA, 0.0);
+
             //System.out.println(sportPA + " for key " + key);
             personHealth.setWeeklyMarginalMetHoursSport((float) sportPA);
 
