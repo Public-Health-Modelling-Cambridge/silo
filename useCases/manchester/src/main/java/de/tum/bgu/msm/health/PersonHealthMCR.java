@@ -8,6 +8,7 @@ import de.tum.bgu.msm.health.data.PersonHealth;
 import de.tum.bgu.msm.health.disease.Diseases;
 import de.tum.bgu.msm.health.disease.HealthExposures;
 import de.tum.bgu.msm.schools.PersonWithSchool;
+import de.tum.bgu.msm.utils.SiloUtil;
 
 import java.util.*;
 
@@ -42,6 +43,8 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
 
 
     //for disease model
+    private EnumMap<Diseases, Float> randomNumByDisease = new EnumMap<>(Diseases.class);
+    private EnumMap<Diseases, Float> lastYearSurvivalRateByDisease = new EnumMap<>(Diseases.class);
     private EnumMap<HealthExposures, EnumMap<Diseases, Float>> relativeRisksByDisease = new EnumMap<>(HealthExposures.class);
     private Map<Integer, List<String>> healthDiseaseTracker = new HashMap<>();
     private List<Diseases> currentDisease = new ArrayList<>();
@@ -55,6 +58,15 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
                            PersonRole role, int jobId,
                            int income)  {
         delegate = new PersonImpl(id, age, gender, occupation, role, jobId, income);
+        //initialize random number for diseases
+        for (Diseases diseases : Diseases.values()){
+            randomNumByDisease.put(diseases, SiloUtil.getRandomObject().nextFloat());
+        }
+
+        //initialize survival rate for diseases
+        for (Diseases diseases : Diseases.values()){
+            lastYearSurvivalRateByDisease.put(diseases, 1.f);
+        }
     }
 
     @Override
@@ -406,5 +418,11 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
 
+    public EnumMap<Diseases, Float> getRandomNumByDisease() {
+        return randomNumByDisease;
+    }
 
+    public EnumMap<Diseases, Float> getLastYearSurvivalRateByDisease() {
+        return lastYearSurvivalRateByDisease;
+    }
 }

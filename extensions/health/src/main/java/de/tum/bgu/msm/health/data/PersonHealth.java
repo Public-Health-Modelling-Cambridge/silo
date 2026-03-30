@@ -65,6 +65,10 @@ public interface PersonHealth extends Person {
 
     float getRelativeRiskByType(String type);
 
+    EnumMap<Diseases, Float> getRandomNumByDisease();
+
+    EnumMap<Diseases, Float> getLastYearSurvivalRateByDisease();
+
     EnumMap<HealthExposures, EnumMap<Diseases, Float>> getRelativeRisksByDisease();
 
     List<Diseases> getCurrentDisease();

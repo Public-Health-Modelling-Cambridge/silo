@@ -14,9 +14,10 @@ import de.tum.bgu.msm.models.ModelUpdateListener;
 import de.tum.bgu.msm.properties.Properties;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.matsim.api.core.v01.TransportMode;
 
+import java.io.IOException;
 import java.util.*;
+import java.util.logging.*;
 import java.util.stream.Collectors;
 
 public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListener {
@@ -25,6 +26,36 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
     public DiseaseModelMCR(DataContainer dataContainer, Properties properties, Random random) {
         super(dataContainer, properties, random);
     }
+
+    //For Debug
+    private static final java.util.logging.Logger debugLogger = java.util.logging.Logger.getLogger(DiseaseModelMCR.class.getName());
+
+    static {
+        try {
+            // Disable console handlers
+            java.util.logging.Logger rootLogger = java.util.logging.Logger.getLogger(DiseaseModelMCR.class.getName());
+            Handler[] handlers = rootLogger.getHandlers();
+            for (Handler handler : handlers) {
+                if (handler instanceof ConsoleHandler) {
+                    rootLogger.removeHandler(handler);
+                }
+            }
+
+            // Create file handler only
+            String path = Properties.get().main.baseDirectory + "/scenOutput/" + Properties.get().main.scenarioName + "/debug.log";
+            FileHandler fileHandler = new FileHandler(path, true);
+            fileHandler.setFormatter(new SimpleFormatter());
+            fileHandler.setLevel(Level.ALL);
+
+            // Add file handler to logger
+            debugLogger.addHandler(fileHandler);
+            debugLogger.setUseParentHandlers(false); // Prevent parent handlers (console)
+            debugLogger.setLevel(Level.ALL);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+    //For Debug
 
     @Override
     public void setup() {
@@ -250,13 +281,23 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                     continue;
                 }
 
-                //TODO: control random number? survival equation
-                if (random.nextDouble() < (personHealth.getCurrentDiseaseProb().get(diseases))) {
+                //For model stability: one random number per person per disease. use survival equation
+                float rand = personHealth.getRandomNumByDisease().get(diseases);
+                float thisYearSurvivalRate = (1 - personHealth.getCurrentDiseaseProb().get(diseases)) * personHealth.getLastYearSurvivalRateByDisease().get(diseases);
+                if (rand > thisYearSurvivalRate) {
                     if (!personHealth.getCurrentDisease().contains(diseases)) {
                         personHealth.getCurrentDisease().add(diseases);
                         newDisease.add(diseases.toString());
                     }
                 }
+
+                //For Debug
+                if(personHealth.getId()==1){
+                    debugLogger.info(year + "," + diseases.name() + "," + rand + "," + personHealth.getCurrentDiseaseProb().get(diseases) +  "," + thisYearSurvivalRate);
+                }
+                //For Debug
+
+                personHealth.getLastYearSurvivalRateByDisease().put(diseases, thisYearSurvivalRate);
             }
 
             // Set remission in terms of years - this is year_remission -1, so with 2, the remission_year is 1 year
