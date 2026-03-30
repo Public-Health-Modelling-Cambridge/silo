@@ -27,36 +27,6 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
         super(dataContainer, properties, random);
     }
 
-    //For Debug
-    private static final java.util.logging.Logger debugLogger = java.util.logging.Logger.getLogger(DiseaseModelMCR.class.getName());
-
-    static {
-        try {
-            // Disable console handlers
-            java.util.logging.Logger rootLogger = java.util.logging.Logger.getLogger(DiseaseModelMCR.class.getName());
-            Handler[] handlers = rootLogger.getHandlers();
-            for (Handler handler : handlers) {
-                if (handler instanceof ConsoleHandler) {
-                    rootLogger.removeHandler(handler);
-                }
-            }
-
-            // Create file handler only
-            String path = Properties.get().main.baseDirectory + "/scenOutput/" + Properties.get().main.scenarioName + "/debug.log";
-            FileHandler fileHandler = new FileHandler(path, true);
-            fileHandler.setFormatter(new SimpleFormatter());
-            fileHandler.setLevel(Level.ALL);
-
-            // Add file handler to logger
-            debugLogger.addHandler(fileHandler);
-            debugLogger.setUseParentHandlers(false); // Prevent parent handlers (console)
-            debugLogger.setLevel(Level.ALL);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-    //For Debug
-
     @Override
     public void setup() {
         logger.warn("Set up health model relative risk and disease state");
@@ -290,12 +260,6 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                         newDisease.add(diseases.toString());
                     }
                 }
-
-                //For Debug
-                if(personHealth.getId()==1){
-                    debugLogger.info(year + "," + diseases.name() + "," + rand + "," + personHealth.getCurrentDiseaseProb().get(diseases) +  "," + thisYearSurvivalRate);
-                }
-                //For Debug
 
                 personHealth.getLastYearSurvivalRateByDisease().put(diseases, thisYearSurvivalRate);
             }

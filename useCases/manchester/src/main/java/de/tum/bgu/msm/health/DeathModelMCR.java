@@ -37,36 +37,6 @@ public class DeathModelMCR extends AbstractModel implements DeathModel {
         //this.random = rnd;
     }
 
-    //For Debug
-    private static final java.util.logging.Logger debugLogger = java.util.logging.Logger.getLogger(DiseaseModelMCR.class.getName());
-
-    static {
-        try {
-            // Disable console handlers
-            java.util.logging.Logger rootLogger = java.util.logging.Logger.getLogger(DiseaseModelMCR.class.getName());
-            Handler[] handlers = rootLogger.getHandlers();
-            for (Handler handler : handlers) {
-                if (handler instanceof ConsoleHandler) {
-                    rootLogger.removeHandler(handler);
-                }
-            }
-
-            // Create file handler only
-            String path = Properties.get().main.baseDirectory + "/scenOutput/" + Properties.get().main.scenarioName + "/debug.log";
-            FileHandler fileHandler = new FileHandler(path, true);
-            fileHandler.setFormatter(new SimpleFormatter());
-            fileHandler.setLevel(Level.ALL);
-
-            // Add file handler to logger
-            debugLogger.addHandler(fileHandler);
-            debugLogger.setUseParentHandlers(false); // Prevent parent handlers (console)
-            debugLogger.setLevel(Level.ALL);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-    //For Debug
-
     @Override
     public Collection<DeathEvent> getEventsForCurrentYear(int year) {
         this.year = year;
@@ -90,12 +60,6 @@ public class DeathModelMCR extends AbstractModel implements DeathModel {
             float rand = ((PersonHealth) person).getRandomNumByDisease().get(Diseases.all_cause_mortality);
             double deathProb = strategy.calculateDeathProbability(person, random);
             float thisYearSurvivalRate = (float) ((1 - deathProb) * ((PersonHealth) person).getLastYearSurvivalRateByDisease().get(Diseases.all_cause_mortality));
-
-            //For Debug
-            if(person.getId()==1){
-                debugLogger.info(year + "," + Diseases.all_cause_mortality + "," + rand + "," + deathProb +  "," + thisYearSurvivalRate);
-            }
-            //For Debug
 
             if (rand > thisYearSurvivalRate) {
                 return die(person);
