@@ -300,6 +300,16 @@ public class PersonHealthMuc implements PersonWithSchool, PersonHealth {
         return relativeRisks.get(type);
     }
 
+    @Override
+    public EnumMap<Diseases, Float> getRandomNumByDisease() {
+        return null;
+    }
+
+    @Override
+    public EnumMap<Diseases, Float> getLastYearSurvivalRateByDisease() {
+        return null;
+    }
+
     public void setRelativeRisks(Map<String, Float> relativeRisks) {
         this.relativeRisks = relativeRisks;
     }
