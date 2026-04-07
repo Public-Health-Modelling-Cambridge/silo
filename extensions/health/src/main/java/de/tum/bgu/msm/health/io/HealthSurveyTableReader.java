@@ -49,7 +49,7 @@ public class HealthSurveyTableReader {
 
                 if (ageGroupIdx < 0 || genderIdx < 0 || imdIdx < 0 || totalPaIdx < 0) {
                     throw new IllegalStateException(
-                            "CSV is missing one or more required columns: age_group, gender, imd, total_pa"
+                            "CSV is missing one or more required columns: age_group, gender, imd, mmetHr_sport_manual"
                     );
                 }
 
@@ -59,7 +59,7 @@ public class HealthSurveyTableReader {
 
                     recCount++;
                     recString = line;
-                    System.out.println("DEBUG Reading line #" + recCount + ": " + line);
+                    //System.out.println("DEBUG Reading line #" + recCount + ": " + line);
 
                     String[] cols = line.split(",");
 
