@@ -14,9 +14,10 @@ import de.tum.bgu.msm.models.ModelUpdateListener;
 import de.tum.bgu.msm.properties.Properties;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.matsim.api.core.v01.TransportMode;
 
+import java.io.IOException;
 import java.util.*;
+import java.util.logging.*;
 import java.util.stream.Collectors;
 
 public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListener {
@@ -250,13 +251,17 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                     continue;
                 }
 
-                //TODO: control random number? survival equation
-                if (random.nextDouble() < (personHealth.getCurrentDiseaseProb().get(diseases))) {
+                //For model stability: one random number per person per disease. use survival equation
+                float rand = personHealth.getRandomNumByDisease().get(diseases);
+                float thisYearSurvivalRate = (1 - personHealth.getCurrentDiseaseProb().get(diseases)) * personHealth.getLastYearSurvivalRateByDisease().get(diseases);
+                if (rand > thisYearSurvivalRate) {
                     if (!personHealth.getCurrentDisease().contains(diseases)) {
                         personHealth.getCurrentDisease().add(diseases);
                         newDisease.add(diseases.toString());
                     }
                 }
+
+                personHealth.getLastYearSurvivalRateByDisease().put(diseases, thisYearSurvivalRate);
             }
 
             // Set remission in terms of years - this is year_remission -1, so with 2, the remission_year is 1 year

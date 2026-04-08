@@ -59,7 +59,7 @@ public class HealthSurveyTableReader {
 
                     recCount++;
                     recString = line;
-                    System.out.println("DEBUG Reading line #" + recCount + ": " + line);
+                    //System.out.println("DEBUG Reading line #" + recCount + ": " + line);
 
                     String[] cols = line.split(",");
 
