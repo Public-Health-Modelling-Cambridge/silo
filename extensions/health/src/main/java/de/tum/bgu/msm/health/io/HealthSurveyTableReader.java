@@ -36,20 +36,20 @@ public class HealthSurveyTableReader {
                 int ageGroupIdx = -1;
                 int genderIdx   = -1;
                 int imdIdx      = -1;
-                int totalPaIdx  = -1;
+                int sportPaIdx  = -1;
 
                 for (int i = 0; i < headers.length; i++) {
                     switch (headers[i].trim().toLowerCase()) {
                         case "age_group"  -> ageGroupIdx = i;
                         case "gender"     -> genderIdx   = i;
                         case "imd"        -> imdIdx       = i;
-                        case "total_pa"   -> totalPaIdx   = i;
+                        case "nontransportpa"   -> sportPaIdx   = i;
                     }
                 }
 
-                if (ageGroupIdx < 0 || genderIdx < 0 || imdIdx < 0 || totalPaIdx < 0) {
+                if (ageGroupIdx < 0 || genderIdx < 0 || imdIdx < 0 || sportPaIdx < 0) {
                     throw new IllegalStateException(
-                            "CSV is missing one or more required columns: age_group, gender, imd, mmetHr_sport_manual"
+                            "CSV is missing one or more required columns: age_group, gender, imd, nonTransportPA"
                     );
                 }
 
@@ -66,14 +66,14 @@ public class HealthSurveyTableReader {
                     String ageGroup = cols[ageGroupIdx].trim();
                     String gender   = cols[genderIdx].trim();
                     String imd      = cols[imdIdx].trim();
-                    double totalPa  = Double.parseDouble(cols[totalPaIdx].trim());
+                    double sportPa  = Double.parseDouble(cols[sportPaIdx].trim());
                     //System.out.println("DEBUG Parsed key: " + key + " | total_PA: " + totalPa);
 
                     String key = ageGroup + "|" + gender.toUpperCase() + "|" + imd;
                     //System.out.println("reading key: " + key + "with totalPA " + totalPa);
                     paDistributionByStrata
                             .computeIfAbsent(key, k -> new ArrayList<>())
-                            .add(totalPa);
+                            .add(sportPa);
                 }
 
         } catch (IOException e) {
