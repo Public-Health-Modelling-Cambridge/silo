@@ -43,7 +43,7 @@ public class HealthSurveyTableReader {
                         case "age_group"  -> ageGroupIdx = i;
                         case "gender"     -> genderIdx   = i;
                         case "imd"        -> imdIdx       = i;
-                        case "nonTransportPA"   -> sportPaIdx   = i;
+                        case "nontransportpa"   -> sportPaIdx   = i;
                     }
                 }
 
