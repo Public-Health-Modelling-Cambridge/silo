@@ -43,13 +43,13 @@ public class HealthSurveyTableReader {
                         case "age_group"  -> ageGroupIdx = i;
                         case "gender"     -> genderIdx   = i;
                         case "imd"        -> imdIdx       = i;
-                        case "mmethr_sport_manual"   -> sportPaIdx   = i;
+                        case "nonTransportPA"   -> sportPaIdx   = i;
                     }
                 }
 
                 if (ageGroupIdx < 0 || genderIdx < 0 || imdIdx < 0 || sportPaIdx < 0) {
                     throw new IllegalStateException(
-                            "CSV is missing one or more required columns: age_group, gender, imd, total_pa"
+                            "CSV is missing one or more required columns: age_group, gender, imd, nonTransportPA"
                     );
                 }
 
