@@ -64,6 +64,8 @@ public class DeathModelMCR extends AbstractModel implements DeathModel {
             if (rand > thisYearSurvivalRate) {
                 return die(person);
             }
+
+            ((PersonHealth) person).getLastYearSurvivalRateByDisease().put(Diseases.all_cause_mortality, thisYearSurvivalRate);
         }
         return false;
     }
