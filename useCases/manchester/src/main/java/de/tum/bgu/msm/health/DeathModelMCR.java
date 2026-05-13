@@ -57,7 +57,7 @@ public class DeathModelMCR extends AbstractModel implements DeathModel {
 
         if (person != null) {
             //For model stability: one random number per person per disease. use survival equation
-            float rand = ((PersonHealth) person).getRandomNumByDisease().get(Diseases.all_cause_mortality);
+            /*float rand = ((PersonHealth) person).getRandomNumByDisease().get(Diseases.all_cause_mortality);
             double deathProb = strategy.calculateDeathProbability(person, random);
             float thisYearSurvivalRate = (float) ((1 - deathProb) * ((PersonHealth) person).getLastYearSurvivalRateByDisease().get(Diseases.all_cause_mortality));
 
@@ -66,6 +66,12 @@ public class DeathModelMCR extends AbstractModel implements DeathModel {
             }
 
             ((PersonHealth) person).getLastYearSurvivalRateByDisease().put(Diseases.all_cause_mortality, thisYearSurvivalRate);
+            */
+
+            //revert to global random for debugging and comparing
+            if(random.nextDouble() < strategy.calculateDeathProbability(person, random)){
+                return die(person);
+            }
         }
         return false;
     }

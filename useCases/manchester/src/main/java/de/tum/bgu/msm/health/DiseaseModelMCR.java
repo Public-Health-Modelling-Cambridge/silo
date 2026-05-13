@@ -252,7 +252,7 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                 }
 
                 //For model stability: one random number per person per disease. use survival equation
-                float rand = personHealth.getRandomNumByDisease().get(diseases);
+                /*float rand = personHealth.getRandomNumByDisease().get(diseases);
                 float thisYearSurvivalRate = (1 - personHealth.getCurrentDiseaseProb().get(diseases)) * personHealth.getLastYearSurvivalRateByDisease().get(diseases);
                 if (rand > thisYearSurvivalRate) {
                     if (!personHealth.getCurrentDisease().contains(diseases)) {
@@ -262,6 +262,15 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                 }
 
                 personHealth.getLastYearSurvivalRateByDisease().put(diseases, thisYearSurvivalRate);
+*/
+
+                //revert to global random for debugging and comparing
+                if (random.nextDouble() < (personHealth.getCurrentDiseaseProb().get(diseases))) {
+                    if (!personHealth.getCurrentDisease().contains(diseases)) {
+                        personHealth.getCurrentDisease().add(diseases);
+                        newDisease.add(diseases.toString());
+                    }
+                }
             }
 
             // Set remission in terms of years - this is year_remission -1, so with 2, the remission_year is 1 year
