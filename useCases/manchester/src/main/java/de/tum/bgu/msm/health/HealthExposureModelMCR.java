@@ -700,11 +700,15 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                             // later, when we have matsim pt simulation, the departure time of return trip needs to be updated according to simulation outcome. - qin' May 2026
                             int returnDepartureTimeInSeconds = trip.getDepartureReturnInMinutes()*60;
 
-                            accessTime_s = dataContainer.getTravelTimes().getTravelTime(destinationZone,originZone,3600 * 8, "ptAccess");
-                            egressTime_s = dataContainer.getTravelTimes().getTravelTime(destinationZone,originZone,3600 * 8, "ptEgress");
-                            totalTravelTime_s = dataContainer.getTravelTimes().getTravelTime(destinationZone,originZone,3600 * 8, "ptTotalTravelTime");
+
+                            //Note that: the current pt skim matrix has been well-validated, it is not near symmetrical,
+                            // which leads to issues of some return trips having extreme longer pt travel time compared to their outbound trip
+                            // to tackle this issue with a simple approach, we just force the pt skim matrix to be symmetrical
+                            accessTime_s = dataContainer.getTravelTimes().getTravelTime(originZone,destinationZone,3600 * 8, "ptAccess");
+                            egressTime_s = dataContainer.getTravelTimes().getTravelTime(originZone,destinationZone,3600 * 8, "ptEgress");
+                            totalTravelTime_s = dataContainer.getTravelTimes().getTravelTime(originZone,destinationZone,3600 * 8, "ptTotalTravelTime");
                             totalInVehicleTime_s = (totalTravelTime_s - accessTime_s - egressTime_s);
-                            busInVehicleTime_s =  totalInVehicleTime_s * dataContainer.getTravelTimes().getTravelTime(destinationZone,originZone,3600 * 8, "ptBusTimeShare");
+                            busInVehicleTime_s =  totalInVehicleTime_s * dataContainer.getTravelTimes().getTravelTime(originZone,destinationZone,3600 * 8, "ptBusTimeShare");
 
                             if(Double.isInfinite(totalTravelTime_s)||Double.isInfinite(accessTime_s) || Double.isInfinite(egressTime_s)){
                                 NO_PATH_TRIP.incrementAndGet();
