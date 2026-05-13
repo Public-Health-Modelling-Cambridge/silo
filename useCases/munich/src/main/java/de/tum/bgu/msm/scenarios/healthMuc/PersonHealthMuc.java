@@ -288,6 +288,26 @@ public class PersonHealthMuc implements PersonWithSchool, PersonHealth {
         return new float[0];
     }
 
+    @Override
+    public float[] getWeeklyHourOccupiedByRail() {
+        return new float[0];
+    }
+
+    @Override
+    public void updateWeeklyHourOccupiedByRail(float[] hourOccupied) {
+
+    }
+
+    @Override
+    public float[] getWeeklyHourOccupiedByTransit() {
+        return new float[0];
+    }
+
+    @Override
+    public void updateWeeklyHourOccupiedByTransit(float[] hourOccupied) {
+
+    }
+
     public void updateWeeklyPollutionExposures(Map<String, Float> newExposures) {
         newExposures.forEach((k, v) -> weeklyExposureByPollutant.merge(k, v, Float::sum));
     }

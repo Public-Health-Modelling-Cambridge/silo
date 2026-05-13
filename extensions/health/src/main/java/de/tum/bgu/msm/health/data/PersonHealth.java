@@ -55,11 +55,19 @@ public interface PersonHealth extends Person {
 
     float getWeeklyGreenExposuresNormalised();
 
-    void updateWeeklyTravelActivityHourOccupied(float[] hourOccupied);
-
     void setWeeklyGreenExposuresNormalised(float greenExposureNormalised);
 
+    void updateWeeklyTravelActivityHourOccupied(float[] hourOccupied);
+
     float[] getWeeklyTravelActivityHourOccupied();
+
+    float[] getWeeklyHourOccupiedByRail();
+
+    void updateWeeklyHourOccupiedByRail(float[] hourOccupied);
+
+    float[] getWeeklyHourOccupiedByTransit();
+
+    void updateWeeklyHourOccupiedByTransit(float[] hourOccupied);
 
     float getAllCauseRR();
 

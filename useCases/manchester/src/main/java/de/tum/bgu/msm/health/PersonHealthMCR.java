@@ -25,6 +25,8 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     private float weeklyActivityMinutes = 0.f;
     private float weeklyHomeMinutes = 0.f;
     private float[] weeklyTravelActivityHourOccupied = new float[24*7];
+    private float[] weeklyHourOccupiedByRail = new float[24*7];
+    private float[] weeklyHourOccupiedByTransit = new float[24*7];
 
     //for exposure model
     private Map<Mode, Float> weeklyMarginalMetHours = new HashMap<>();
@@ -334,9 +336,33 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
     @Override
-    public void updateWeeklyTravelActivityHourOccupied(float[] travelActivityHourOccupied) {
-        for(int i=0; i<travelActivityHourOccupied.length; i++) {
-            this.weeklyTravelActivityHourOccupied[i] += travelActivityHourOccupied[i];
+    public float[] getWeeklyHourOccupiedByRail() {
+        return weeklyHourOccupiedByRail;
+    }
+
+    @Override
+    public void updateWeeklyHourOccupiedByRail(float[] hourOccupied) {
+        for(int i=0; i<hourOccupied.length; i++) {
+            this.weeklyHourOccupiedByRail[i] += hourOccupied[i];
+        }
+    }
+
+    @Override
+    public float[] getWeeklyHourOccupiedByTransit() {
+        return weeklyHourOccupiedByTransit;
+    }
+
+    @Override
+    public void updateWeeklyHourOccupiedByTransit(float[] hourOccupied) {
+        for(int i=0; i<hourOccupied.length; i++) {
+            this.weeklyHourOccupiedByTransit[i] += hourOccupied[i];
+        }
+    }
+
+    @Override
+    public void updateWeeklyTravelActivityHourOccupied(float[] hourOccupied) {
+        for(int i=0; i<hourOccupied.length; i++) {
+            this.weeklyTravelActivityHourOccupied[i] += hourOccupied[i];
         }
     }
 
@@ -370,6 +396,8 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
         Arrays.fill(weeklyNoiseExposureByHour,0.f);
         weeklyNdviExposure = 0.f;
         Arrays.fill(weeklyTravelActivityHourOccupied,0.f);
+        Arrays.fill(weeklyHourOccupiedByRail,0.f);
+        Arrays.fill(weeklyHourOccupiedByTransit,0.f);
     }
 
     public float getNoiseHighAnnoyedPercentage() {
