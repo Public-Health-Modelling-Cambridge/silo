@@ -1529,16 +1529,27 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                     min_ventilation_rate = 0.61;
                 }
 
-                sumExposurePM25_normalized += weeklyPollutionExposures.get("pm2.5")[weekHour]/actualHourForAirExposure/min_ventilation_rate;
-                sumExposureNo2_normalized += weeklyPollutionExposures.get("no2")[weekHour]/actualHourForAirExposure/min_ventilation_rate;
+                if (actualHourForAirExposure > 0) {
+                    sumExposurePM25_normalized += weeklyPollutionExposures.get("pm2.5")[weekHour]/actualHourForAirExposure/min_ventilation_rate;
+                    sumExposureNo2_normalized += weeklyPollutionExposures.get("no2")[weekHour]/actualHourForAirExposure/min_ventilation_rate;
+                }
 
+                if (actualHourForNoiseExposure > 0) {
+                    float hourlyNoiseLevel = (float) NoiseMetrics.getHourlyNoiseLevel(dayHour, (weeklyNoiseExposureByHour[weekHour]/actualHourForNoiseExposure));
+                    sumExposureNoise += hourlyNoiseLevel;
 
-                float hourlyNoiseLevel = (float) NoiseMetrics.getHourlyNoiseLevel(dayHour, (weeklyNoiseExposureByHour[weekHour]/actualHourForNoiseExposure));
-                sumExposureNoise += hourlyNoiseLevel;
+                    if (dayHour <= 7  || dayHour > 23 ){
+                        sumActualHourForNoiseExposureNight += actualHourForNoiseExposure;
+                        sumExposureNoiseNight += hourlyNoiseLevel;
+                    }
+                }
 
-                if (dayHour <= 7  || dayHour > 23 ){
-                    sumActualHourForNoiseExposureNight += actualHourForNoiseExposure;
-                    sumExposureNoiseNight += hourlyNoiseLevel;
+                if (actualHourForNoiseExposure < 0) {
+                    logger.warn("Person id: " + person.getId() + "has negative hour for noise exposure at hour: " + weekHour);
+                }
+
+                if (actualHourForAirExposure < 0) {
+                    logger.warn("Person id: " + person.getId() + "has negative hour for air exposure at hour: " + weekHour);
                 }
             }
 

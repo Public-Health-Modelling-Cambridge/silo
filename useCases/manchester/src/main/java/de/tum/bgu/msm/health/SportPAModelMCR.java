@@ -72,7 +72,7 @@ public class SportPAModelMCR extends AbstractModel implements ModelUpdateListene
 
             double sportPA;
             if (matches == null || matches.isEmpty()) {
-                System.err.println("Warning: no match for stratum " + key + " – using global distribution.");
+                //System.err.println("Warning: no match for stratum " + key + " – using global distribution.");
                 sportPA = sample(globalValues, random);
             } else {
                 sportPA = sample(matches, random);
