@@ -530,7 +530,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
 
     private void writeAndClearTrafficFlows(int year, Network network, Day day) {
         for (String modeAdjusted : Set.of("car", "walk", "bike")) {
-            writeTrafficFlowsToCSV(year, day, modeAdjusted, network);
+            //writeTrafficFlowsToCSV(year, day, modeAdjusted, network);
             trafficFlowsByDayModeLinkHour.get(day).remove(modeAdjusted);
         }
         trafficFlowsByDayModeLinkHour.remove(day); // Clear entire day
