@@ -62,6 +62,9 @@ import org.matsim.vehicles.Vehicle;
 import org.matsim.vehicles.VehicleType;
 import org.matsim.vehicles.VehicleUtils;
 import org.matsim.vehicles.VehiclesFactory;
+import org.matsim.pt.utils.CreateVehiclesForSchedule;
+import ch.sbb.matsim.config.SwissRailRaptorConfigGroup;
+import ch.sbb.matsim.routing.pt.raptor.SwissRailRaptorModule;
 import routing.*;
 import routing.components.Gradient;
 import routing.components.JctStress;
@@ -126,7 +129,7 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
 
         if (properties.transportModel.matsimInitialEventsFile == null) {
             //TODO: comment out for longitudinal simulation. need to make it more general
-            //runTransportModel(properties.main.startYear);
+            runTransportModel(properties.main.startYear);
             logger.warn("This is a temporary fix, we don't want to run again the transport model in the longitudinal scenario");
         } else {
             String eventsFile = properties.main.baseDirectory + properties.transportModel.matsimInitialEventsFile;
@@ -186,7 +189,7 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         runCarTruckSimulation(year, assembledMultiScenario);
 
         //run bike ped simulation
-        runBikePedSimulation(year, assembledMultiScenario);
+        //runBikePedSimulation(year, assembledMultiScenario);
     }
 
     private void runBikePedSimulation(int year, Map<Day, Scenario> assembledMultiScenario) {
@@ -328,15 +331,16 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
 
             logger.warn("MATSim truck/through population: " + day + "|" + year + "|" + populationCarTruck.getPersons().size());
 
-            // Add car plans from MITO
+            // Add car and pt plans from MITO. SwissRailRaptor will expand each "pt" leg into
+            // walk-access → transit_walk/bus/tram → walk-egress against the schedule at routing time.
             for (Person pp : assembledScenario.getPopulation().getPersons().values()) {
                 String mode = mainModeIdentifier.identifyMainMode(TripStructureUtils.getLegs(pp.getSelectedPlan()));
-                if("car".equals(mode)){
+                if ("car".equals(mode) || "pt".equals(mode)) {
                         populationCarTruck.addPerson(pp);
                 }
             }
 
-            logger.warn("MATSim car/truck/through population: " + day + "|" + year + "|" + populationCarTruck.getPersons().size());
+            logger.warn("MATSim car/truck/through/pt population: " + day + "|" + year + "|" + populationCarTruck.getPersons().size());
 
 
             logger.warn("Running MATSim transport model for " + day + " car scenario " + year + ".");
@@ -347,6 +351,35 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
             //initialize scenario
             MutableScenario matsimScenario = (MutableScenario) ScenarioUtils.loadScenario(carTruckConfig);
             matsimScenario.setPopulation(populationCarTruck);
+
+            // Fill any gaps between schedule and transit-vehicles file (safe no-op when
+            // transit-vehicles.xml already covers all routes).
+            new CreateVehiclesForSchedule(matsimScenario.getTransitSchedule(),
+                                          matsimScenario.getTransitVehicles()).run();
+
+            // Make road-running PT vehicles (buses) physically interact with cars and trucks:
+            //   1. Force networkMode = "car" so the bus enters the same per-link flow queue as
+            //      cars/trucks (MATSim QSim tracks flow per-mode per-link; without this buses
+            //      would have their own queue and never contend for car capacity).
+            //   2. Scale PCU by the car sample factor (e.g. bus PCU 2.5 -> 0.25 at 10% sample)
+            //      so a bus occupies the correct fraction of the sampled link capacity.
+            // Trams/rail/etc. run on dedicated PT links and are left untouched.
+            // PREREQUISITE: links that buses traverse must include "car" in their allowedModes.
+            // The multimodal network from PT2MATSim usually satisfies this on street links.
+            double carSampleFactor = properties.healthData.matsim_scale_factor_car;
+            Set<String> dedicatedPtModes = Set.of("tram", "rail", "train", "subway", "ferry");
+            for (VehicleType vt : matsimScenario.getTransitVehicles().getVehicleTypes().values()) {
+                String netMode = vt.getNetworkMode();
+                if (netMode != null && dedicatedPtModes.contains(netMode.toLowerCase())) {
+                    logger.info("PT vehicle type " + vt.getId() + " kept on dedicated networkMode=" + netMode
+                            + " (no PCU scaling, no car-queue interaction).");
+                    continue;
+                }
+                vt.setNetworkMode(TransportMode.car);
+                vt.setPcuEquivalents(vt.getPcuEquivalents() * carSampleFactor);
+                logger.info("PT vehicle type " + vt.getId() + " (was networkMode=" + netMode
+                        + ") moved to car queue with scaled PCU " + vt.getPcuEquivalents());
+            }
 
             //set vehicle types
             VehicleType car = VehicleUtils.getFactory().createVehicleType(Id.create(TransportMode.car, VehicleType.class));
@@ -365,6 +398,7 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
 
             //set up controler
             final Controler controlerCar = new Controler(matsimScenario);
+            controlerCar.addOverridingModule(new SwissRailRaptorModule());
             controlerCar.run();
             logger.warn("Running MATSim transport model for " + day + " car scenario " + year + " finished.");
 
@@ -550,8 +584,37 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         config.qsim().setEndTime(24*60*60);
         config.global().setNumberOfThreads(16);
         config.qsim().setNumberOfThreads(16);
-        config.transit().setUsingTransitInMobsim(false);
         config.routing().setRoutingRandomness(0.);
+
+        // --- Public Transport ---
+        // Multimodal network carries car/truck/bike/walk + bus/tram/rail. Buses share road
+        // links with cars/trucks; trams/rail stay on dedicated pt links.
+        config.network().setInputFile(properties.main.baseDirectory + properties.healthData.multimodalNetwork_file);
+        config.transit().setTransitScheduleFile(properties.main.baseDirectory + properties.healthData.transitSchedule_file);
+        config.transit().setVehiclesFile(properties.main.baseDirectory + properties.healthData.transitVehicles_file);
+        config.transit().setUseTransit(true);
+        config.transit().setTransitModes(Set.of("pt"));
+
+        // Swiss Rail Raptor — faster PT router; access/egress kept teleported (no
+        // intermodal access/egress configured), per PT_INTEGRATION_PROPOSAL §4.
+        ConfigUtils.addOrGetModule(config, SwissRailRaptorConfigGroup.class);
+
+        // pt scoring params — required so MITO-emitted "pt" legs can be scored.
+        ModeParams ptParams = config.scoring().getOrCreateModeParams(TransportMode.pt);
+        ptParams.setConstant(0.);
+        ptParams.setMarginalUtilityOfTraveling(-6.0);
+        ptParams.setMarginalUtilityOfDistance(0.);
+        ptParams.setMonetaryDistanceRate(0.);
+
+        // Raptor's transfer walks at the same stop area emit "non_network_walk"; without
+        // its own ModeParams the scoring lookup NPEs. Mirror walk params.
+        ModeParams walkParams = config.scoring().getOrCreateModeParams(TransportMode.walk);
+        ModeParams nonNetworkWalk = new ModeParams("non_network_walk");
+        nonNetworkWalk.setConstant(walkParams.getConstant());
+        nonNetworkWalk.setMarginalUtilityOfTraveling(walkParams.getMarginalUtilityOfTraveling());
+        nonNetworkWalk.setMarginalUtilityOfDistance(walkParams.getMarginalUtilityOfDistance());
+        nonNetworkWalk.setMonetaryDistanceRate(walkParams.getMonetaryDistanceRate());
+        config.scoring().addModeParams(nonNetworkWalk);
 
         // Set scale factor
         config.qsim().setFlowCapFactor(properties.main.scaleFactor * properties.healthData.matsim_scale_factor_car);

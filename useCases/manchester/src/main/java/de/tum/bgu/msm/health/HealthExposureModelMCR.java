@@ -434,6 +434,10 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                     case "walk":
                         personHealth.updateWeeklyAccidentRisks(Map.of("severeFatalInjuryWalk", linkRiskPerPerson));
                         break;
+                    case "pt":
+                        // In-vehicle PT leg: negligible accident risk on the vehicle itself.
+                        // Walk-access/egress legs are tracked separately under "walk".
+                        break;
                     default:
                         throw new RuntimeException("Undefined mode " + visit.mode);
                 }

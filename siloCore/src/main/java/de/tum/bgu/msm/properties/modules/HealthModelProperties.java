@@ -12,6 +12,10 @@ public class HealthModelProperties {
     public final String truck_plan_file;
     public final String throughTraffic_plan_file;
 
+    public final String transitSchedule_file;
+    public final String transitVehicles_file;
+    public final String multimodalNetwork_file;
+
     public final double matsim_scale_factor_car;
     public final double matsim_scale_factor_bikePed;
     public final double MAX_WALKSPEED;
@@ -53,6 +57,12 @@ public class HealthModelProperties {
         truck_plan_file = PropertiesUtil.getStringProperty(bundle, "truck.plan", "input/freight/truck_plans.xml");
 
         throughTraffic_plan_file = PropertiesUtil.getStringProperty(bundle, "throughTraffic.plan", "input/freight/throughTraffic_plans.xml");
+
+        transitSchedule_file = PropertiesUtil.getStringProperty(bundle, "transit.schedule.file", "input/pt/manchester_schedule.xml.gz");
+
+        transitVehicles_file = PropertiesUtil.getStringProperty(bundle, "transit.vehicles.file", "input/pt/transitVehicles.xml");
+
+        multimodalNetwork_file = PropertiesUtil.getStringProperty(bundle, "multimodal.network.file", "input/pt/multimodal_network.xml.gz");
 
         matsim_scale_factor_car = PropertiesUtil.getDoubleProperty(bundle, "matsim.scale.factor.car", 0.1);
 
