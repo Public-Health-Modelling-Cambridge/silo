@@ -119,7 +119,7 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         this.matsimData = matsimData;
         this.scenarioAssembler = scenarioAssembler;
         this.properties = properties;
-        this.simulatedDays = Arrays.asList(Day.thursday,Day.saturday,Day.sunday);
+        this.simulatedDays = Arrays.asList(Day.thursday); // we only test a typical weekday
         this.random = random;
     }
 
