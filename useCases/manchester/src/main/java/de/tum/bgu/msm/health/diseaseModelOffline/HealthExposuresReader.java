@@ -39,6 +39,8 @@ public class HealthExposuresReader {
             int posPM2_5 = SiloUtil.findPositionInArray("exposure_normalised_pm25", header);
             int posNO2 = SiloUtil.findPositionInArray("exposure_normalised_no2", header);
             int posNoise = SiloUtil.findPositionInArray("exposure_normalised_noise_Lden", header);
+            int posNoiseHA = SiloUtil.findPositionInArray("exposure_noise_HA", header);
+            int posNoiseHSD = SiloUtil.findPositionInArray("exposure_noise_HSD", header);
             int posNdvi = SiloUtil.findPositionInArray("exposure_normalised_ndvi", header);
 
             int posInjCar = SiloUtil.findPositionInArray("severeFatalInjuryCar", header);
@@ -54,6 +56,8 @@ public class HealthExposuresReader {
                     pp.updateWeeklyMarginalMetHours(Mode.walk, Float.parseFloat(lineElements[posMmetWalk]));
                     pp.updateWeeklyMarginalMetHours(Mode.bicycle, Float.parseFloat(lineElements[posMmetCycle]));
                     pp.setWeeklyMarginalMetHoursSport(Float.parseFloat(lineElements[posMmetSport]));
+                    pp.setNoiseHighSleepDisturbancePercentage(Float.parseFloat(lineElements[posNoiseHSD]));
+                    pp.setNoiseHighAnnoyedPercentage(Float.parseFloat(lineElements[posNoiseHA]));
 
                     Map<String, Double> injuryMap = new HashMap<>();
                     injuryMap.put("severeFatalInjuryCar", Double.parseDouble(lineElements[posInjCar]));
