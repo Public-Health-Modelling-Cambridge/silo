@@ -47,9 +47,11 @@ import org.matsim.contrib.dvrp.trafficmonitoring.TravelTimeUtils;
 import org.matsim.core.config.Config;
 import org.matsim.core.config.ConfigUtils;
 import org.matsim.core.config.groups.*;
+import org.matsim.core.controler.AbstractModule;
 import org.matsim.core.controler.Controler;
 import org.matsim.core.controler.ControlerDefaults;
 import org.matsim.core.controler.OutputDirectoryHierarchy;
+import org.matsim.core.router.NetworkRoutingProvider;
 import org.matsim.core.network.NetworkUtils;
 import org.matsim.core.population.PopulationUtils;
 import org.matsim.core.router.MainModeIdentifierImpl;
@@ -548,12 +550,13 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
                         + ") moved to car queue with scaled PCU " + vt.getPcuEquivalents());
             }
 
-            // Mode-level vehicle types for every routing network mode. With
-            // modeVehicleTypesFromVehiclesData the QSim builds car/truck vehicles from these;
-            // the bike/walk types exist so PrepareForSim can hand the routers a vehicle whose
-            // maximumVelocity feeds the JIBE link speed calculators. Population-average speeds
-            // for now — per-person age/gender speeds (as in runBikePedSimulation) would require
-            // fromVehiclesData plus one vehicle per person and mode.
+            // Mode-level vehicle types. With modeVehicleTypesFromVehiclesData the QSim builds
+            // car/truck vehicles from these; PrepareForSim additionally needs a "bike" type to
+            // provision vehicles for the bike network mode. Note: the routers receive a null
+            // vehicle (plain NetworkRoutingModule), so routed bike/walk travel times use the
+            // JIBE config-group default speeds (5.5 m/s bike, 1.67 m/s walk), not these types.
+            // Per-person age/gender speeds (as in runBikePedSimulation) would require
+            // fromVehiclesData plus one vehicle per person and mode, in the QSim.
             VehiclesFactory fac = VehicleUtils.getFactory();
             Id<VehicleType> carTypeId = Id.create(TransportMode.car, VehicleType.class);
             if (!matsimScenario.getVehicles().getVehicleTypes().containsKey(carTypeId)) {
@@ -582,15 +585,6 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
                 matsimScenario.getVehicles().addVehicleType(bicycle);
             }
 
-            Id<VehicleType> walkTypeId = Id.create(TransportMode.walk, VehicleType.class);
-            if (!matsimScenario.getVehicles().getVehicleTypes().containsKey(walkTypeId)) {
-                VehicleType walk = fac.createVehicleType(walkTypeId);
-                walk.setMaximumVelocity(averageMaxSpeed(Mode.walk));
-                walk.setNetworkMode(TransportMode.walk);
-                walk.setPcuEquivalents(0.);
-                matsimScenario.getVehicles().addVehicleType(walk);
-            }
-
             matsimScenario.getConfig().qsim().setVehiclesSource(QSimConfigGroup.VehiclesSource.modeVehicleTypesFromVehiclesData);
 
             //set up controler
@@ -598,6 +592,17 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
             controler.addOverridingModule(new SwissRailRaptorModule());
             controler.addOverridingModule(new WalkModule());
             controler.addOverridingModule(new BicycleModule());
+            // Walk is teleported at config level (raptor requirement, see fillAllModesConfig),
+            // but direct walk legs still need JIBE network routing. Overriding the walk
+            // routing-module binding re-attaches network routing — the network-vs-teleported
+            // consistency check only inspects the config, not Guice bindings. The WalkModule
+            // above provides the walk TravelTime and disutility this provider picks up.
+            controler.addOverridingModule(new AbstractModule() {
+                @Override
+                public void install() {
+                    addRoutingModuleBinding(TransportMode.walk).toProvider(new NetworkRoutingProvider(TransportMode.walk));
+                }
+            });
             controler.run();
             logger.warn("Running MATSim transport model for " + day + " all-modes scenario " + year + " finished.");
 
@@ -652,14 +657,17 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         config.controller().setWriteEventsInterval(Math.max(config.controller().getLastIteration(), 1));
 
         // Modes: only car/truck are QSim main modes (pt vehicles are driven by the transit
-        // engine). bike/walk are network routing modes WITHOUT being main modes — the QSim
-        // teleports them along their routed path with the routed travel time. To move them
-        // into the QSim later (e.g. for link-level exposure events), add them to mainModes
-        // and switch to per-person vehicles + SeepageQ.
+        // engine). bike is a network routing mode WITHOUT being a main mode — the QSim
+        // teleports it along its routed path with the routed travel time. walk must STAY a
+        // teleported mode in the config: SwissRailRaptor's TransitRouterConfig hard-requires
+        // teleported walk params (beeline speed for pt access/egress/transfer walks) and
+        // MATSim forbids a mode being both network and teleported. Direct walk legs are
+        // nevertheless network-routed via the routing-module override in
+        // runAllModesSimulation. To move bike/walk into the QSim later (e.g. for link-level
+        // exposure events), make them main modes and switch to per-person vehicles + SeepageQ.
         config.qsim().setMainModes(List.of(TransportMode.car, TransportMode.truck));
-        config.routing().setNetworkModes(List.of(TransportMode.car, TransportMode.truck, TransportMode.bike, TransportMode.walk));
+        config.routing().setNetworkModes(List.of(TransportMode.car, TransportMode.truck, TransportMode.bike));
         config.routing().removeModeRoutingParams(TransportMode.bike);
-        config.routing().removeModeRoutingParams(TransportMode.walk);
         config.routing().setAccessEgressType(RoutingConfigGroup.AccessEgressType.none);
 
         // --- Scoring ---
