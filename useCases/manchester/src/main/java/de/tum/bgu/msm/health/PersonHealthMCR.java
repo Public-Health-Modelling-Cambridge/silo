@@ -271,7 +271,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
 
     @Override
     public float getWeeklyExposureByPollutantNormalised(String pollutant) {
-        return weeklyExposureByPollutantNormalised.get(pollutant);
+        return weeklyExposureByPollutantNormalised.getOrDefault(pollutant, 0.0f);
     }
 
     @Override
