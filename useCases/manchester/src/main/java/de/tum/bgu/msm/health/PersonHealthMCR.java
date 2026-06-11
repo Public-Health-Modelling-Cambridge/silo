@@ -33,7 +33,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     private float weeklyMarginalMetHoursSport = 0.f;
     private Map<String, Double> weeklyAccidentRisks = new HashMap<>();
     private Map<String, float[]> weeklyExposureByPollutantByHour = new HashMap<>();
-    private Map<String, Float> weeklyExposureByPollutantNormalised;
+    private Map<String, Float> weeklyExposureByPollutantNormalised = new HashMap<>();
 
     private float[] weeklyNoiseExposureByHour = new float[24*7];
     private float weeklyNoiseExposureNormalised;
