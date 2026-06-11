@@ -357,15 +357,19 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
             new CreateVehiclesForSchedule(matsimScenario.getTransitSchedule(),
                                           matsimScenario.getTransitVehicles()).run();
 
-            // Make road-running PT vehicles (buses) physically interact with cars and trucks:
-            //   1. Force networkMode = "car" so the bus enters the same per-link flow queue as
-            //      cars/trucks (MATSim QSim tracks flow per-mode per-link; without this buses
-            //      would have their own queue and never contend for car capacity).
-            //   2. Scale PCU by the car sample factor (e.g. bus PCU 2.5 -> 0.25 at 10% sample)
-            //      so a bus occupies the correct fraction of the sampled link capacity.
-            // Trams/rail/etc. run on dedicated PT links and are left untouched.
-            // PREREQUISITE: links that buses traverse must include "car" in their allowedModes.
-            // The multimodal network from PT2MATSim usually satisfies this on street links.
+            // Road-running PT (buses) must share road space with cars/trucks so congestion
+            // propagates into bus in-vehicle times. We:
+            //   1. Force networkMode = "car" so buses are simulated on the car network alongside
+            //      cars/trucks and contend for the same link flow/storage capacity.
+            //   2. Scale PCU by the car sample factor (e.g. bus PCU 2.5 -> 0.25 at a 10% sample)
+            //      so each full-frequency bus occupies the correct fraction of the sampled
+            //      capacity. (Consistent only while scale.factor == 1; otherwise scale by
+            //      scale.factor * matsim_scale_factor_car to match flowCapFactor.)
+            // Trams/rail (networkMode tram/rail) run on dedicated PT links and are left untouched.
+            // allowedModes governs WHERE interaction happens, not whether a bus can move: QSim does
+            // not re-check allowedModes along a vehicle's (schedule-defined) route, so buses still
+            // traverse bus-only links fine. Links coded car+bus congest together; bus-only links
+            // (bus lanes/busways) correctly see no car interaction.
             double carSampleFactor = properties.healthData.matsim_scale_factor_car;
             Set<String> dedicatedPtModes = Set.of("tram", "rail", "train", "subway", "ferry");
             for (VehicleType vt : matsimScenario.getTransitVehicles().getVehicleTypes().values()) {
@@ -593,6 +597,10 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         config.transit().setTransitScheduleFile(properties.main.baseDirectory + properties.healthData.transitSchedule_file);
         config.transit().setVehiclesFile(properties.main.baseDirectory + properties.healthData.transitVehicles_file);
         config.transit().setUseTransit(true);
+        // The base config sets usingTransitInMobsim=false (transit teleported). We MUST re-enable
+        // it here, otherwise transit vehicles are never placed in the QSim: buses would not enter
+        // the car queue and would never pick up congestion delay, defeating the road-PT interaction.
+        config.transit().setUsingTransitInMobsim(true);
         config.transit().setTransitModes(Set.of("pt"));
 
         // Swiss Rail Raptor — faster PT router; access/egress kept teleported (no
