@@ -85,6 +85,11 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
 
     private static final Logger logger = LogManager.getLogger(MatsimTransportModelMCRHealth.class);
 
+    // Subpopulations steer replanning only (scoring falls back to the default parameter set):
+    // "person" agents may switch mode, "freight" (trucks + through traffic) may only re-route.
+    private static final String SUBPOP_PERSON = "person";
+    private static final String SUBPOP_FREIGHT = "freight";
+
     private final Properties properties;
     private final Config initialMatsimConfig;
 
@@ -185,8 +190,11 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
 
         assembledMultiScenario = scenarioAssembler.assembleMultiScenarios(initialMatsimConfig, year, travelTimes);
 
+        //run all modes (car, truck, pt, bike, walk) in one simulation so modes compete via mode choice
+        runAllModesSimulation(year, assembledMultiScenario);
+
         //run car truck simulation
-        runCarTruckSimulation(year, assembledMultiScenario);
+        //runCarTruckSimulation(year, assembledMultiScenario);
 
         //run bike ped simulation
         //runBikePedSimulation(year, assembledMultiScenario);
@@ -423,6 +431,438 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
                 updateTravelTimes(travelTime, travelDisutility);
             }
         }
+    }
+
+    /**
+     * One integrated simulation for all modes, replacing the separate runCarTruckSimulation /
+     * runBikePedSimulation pair so that car, pt, bike and walk compete against each other
+     * (mode choice via ChangeTripMode replanning).
+     *
+     * Teleport variant for active modes: bike/walk are network-ROUTED with the JIBE travel
+     * times and disutilities, but they are not QSim main modes — the QSim teleports them along
+     * their routed path using the routed travel time. They therefore never interact with
+     * cars/trucks/pt by construction, and add no meaningful QSim cost across the ~100
+     * iterations that the motorized side needs to equilibrate. Buses share the car queue as
+     * before; trams/rail stay on dedicated links.
+     */
+    private void runAllModesSimulation(int year, Map<Day, Scenario> assembledMultiScenario) {
+        for (Day day : simulatedDays) {
+            Scenario assembledScenario = assembledMultiScenario.get(day);
+
+            Population population = PopulationUtils.createPopulation(ConfigUtils.createConfig());
+
+            // Add truck plans from tfgm (static)
+            String truckPlans = properties.main.baseDirectory + properties.healthData.truck_plan_file;
+            PopulationUtils.readPopulation(population, truckPlans);
+
+            double truckSample;
+            if(day.equals(Day.thursday)) {
+                truckSample = 1.278066;
+            } else if (day.equals(Day.saturday)) {
+                truckSample = 0.430817;
+            } else if (day.equals(Day.sunday)) {
+                truckSample = 0.178852;
+            } else {
+                throw new RuntimeException("Unrecognised day " + day);
+            }
+
+            logger.info(day + " truck sample: " + truckSample);
+            if(truckSample < 1.) {
+                PopulationUtils.sampleDown(population, truckSample);
+            }
+
+            logger.warn("MATSim truck population: " + day + "|" + year + "|" + population.getPersons().size());
+
+            //Add through car plans from tfgm (static)
+            Population populationThroughTraffic = PopulationUtils.createPopulation(ConfigUtils.createConfig());
+
+            String throughPlans = properties.main.baseDirectory + properties.healthData.throughTraffic_plan_file;
+            PopulationUtils.readPopulation(populationThroughTraffic, throughPlans);
+
+            double throughCarSample;
+            if(day.equals(Day.thursday)) {
+                throughCarSample = 1.;
+            } else if (day.equals(Day.saturday)) {
+                throughCarSample = 0.79;
+            } else if (day.equals(Day.sunday)) {
+                throughCarSample = 0.46;
+            } else {
+                throw new RuntimeException("Unrecognised day " + day);
+            }
+
+            logger.info(day + " through traffic sample: " + throughCarSample);
+            if(throughCarSample < 1.) {
+                PopulationUtils.sampleDown(populationThroughTraffic, throughCarSample);
+            }
+
+            for (Person pp : populationThroughTraffic.getPersons().values()) {
+                population.addPerson(pp);
+            }
+
+            // Everything loaded so far is fixed-mode background traffic
+            for (Person pp : population.getPersons().values()) {
+                PopulationUtils.putSubpopulation(pp, SUBPOP_FREIGHT);
+            }
+
+            logger.warn("MATSim truck/through population: " + day + "|" + year + "|" + population.getPersons().size());
+
+            // Add ALL MITO persons — no mode filter: MITO's chosen mode is only the starting
+            // point, agents may switch among car/pt/bike/walk during replanning.
+            for (Person pp : assembledScenario.getPopulation().getPersons().values()) {
+                PopulationUtils.putSubpopulation(pp, SUBPOP_PERSON);
+                population.addPerson(pp);
+            }
+
+            logger.warn("MATSim all-modes population: " + day + "|" + year + "|" + population.getPersons().size());
+
+            logger.warn("Running MATSim transport model for " + day + " all-modes scenario " + year + ".");
+            Config allModesConfig = ConfigUtils.loadConfig(initialMatsimConfig.getContext());
+            allModesConfig.addModule(new BicycleConfigGroup());
+            allModesConfig.addModule(new WalkConfigGroup());
+            fillAllModesConfig(allModesConfig, year, day);
+
+            //initialize scenario
+            MutableScenario matsimScenario = (MutableScenario) ScenarioUtils.loadScenario(allModesConfig);
+            matsimScenario.setPopulation(population);
+
+            // Fill any gaps between schedule and transit-vehicles file (safe no-op when
+            // transit-vehicles.xml already covers all routes).
+            new CreateVehiclesForSchedule(matsimScenario.getTransitSchedule(),
+                                          matsimScenario.getTransitVehicles()).run();
+
+            // Road-running PT shares the car queue (see runCarTruckSimulation for the full
+            // rationale): networkMode=car + PCU scaled by the car sample factor; trams/rail
+            // stay on dedicated links untouched.
+            double carSampleFactor = properties.healthData.matsim_scale_factor_car;
+            Set<String> dedicatedPtModes = Set.of("tram", "rail", "train", "subway", "ferry");
+            for (VehicleType vt : matsimScenario.getTransitVehicles().getVehicleTypes().values()) {
+                String netMode = vt.getNetworkMode();
+                if (netMode != null && dedicatedPtModes.contains(netMode.toLowerCase())) {
+                    logger.info("PT vehicle type " + vt.getId() + " kept on dedicated networkMode=" + netMode
+                            + " (no PCU scaling, no car-queue interaction).");
+                    continue;
+                }
+                vt.setNetworkMode(TransportMode.car);
+                vt.setPcuEquivalents(vt.getPcuEquivalents() * carSampleFactor);
+                logger.info("PT vehicle type " + vt.getId() + " (was networkMode=" + netMode
+                        + ") moved to car queue with scaled PCU " + vt.getPcuEquivalents());
+            }
+
+            // Mode-level vehicle types for every routing network mode. With
+            // modeVehicleTypesFromVehiclesData the QSim builds car/truck vehicles from these;
+            // the bike/walk types exist so PrepareForSim can hand the routers a vehicle whose
+            // maximumVelocity feeds the JIBE link speed calculators. Population-average speeds
+            // for now — per-person age/gender speeds (as in runBikePedSimulation) would require
+            // fromVehiclesData plus one vehicle per person and mode.
+            VehiclesFactory fac = VehicleUtils.getFactory();
+            Id<VehicleType> carTypeId = Id.create(TransportMode.car, VehicleType.class);
+            if (!matsimScenario.getVehicles().getVehicleTypes().containsKey(carTypeId)) {
+                VehicleType car = fac.createVehicleType(carTypeId);
+                car.setPcuEquivalents(1.);
+                car.setLength(7.5);
+                car.setNetworkMode(TransportMode.car);
+                matsimScenario.getVehicles().addVehicleType(car);
+            }
+
+            Id<VehicleType> truckTypeId = Id.create(TransportMode.truck, VehicleType.class);
+            if (!matsimScenario.getVehicles().getVehicleTypes().containsKey(truckTypeId)) {
+                VehicleType truck = fac.createVehicleType(truckTypeId);
+                truck.setPcuEquivalents(2.5);
+                truck.setLength(15.);
+                truck.setNetworkMode(TransportMode.truck);
+                matsimScenario.getVehicles().addVehicleType(truck);
+            }
+
+            Id<VehicleType> bikeTypeId = Id.create(TransportMode.bike, VehicleType.class);
+            if (!matsimScenario.getVehicles().getVehicleTypes().containsKey(bikeTypeId)) {
+                VehicleType bicycle = fac.createVehicleType(bikeTypeId);
+                bicycle.setMaximumVelocity(averageMaxSpeed(Mode.bicycle));
+                bicycle.setNetworkMode(TransportMode.bike);
+                bicycle.setPcuEquivalents(0.);
+                matsimScenario.getVehicles().addVehicleType(bicycle);
+            }
+
+            Id<VehicleType> walkTypeId = Id.create(TransportMode.walk, VehicleType.class);
+            if (!matsimScenario.getVehicles().getVehicleTypes().containsKey(walkTypeId)) {
+                VehicleType walk = fac.createVehicleType(walkTypeId);
+                walk.setMaximumVelocity(averageMaxSpeed(Mode.walk));
+                walk.setNetworkMode(TransportMode.walk);
+                walk.setPcuEquivalents(0.);
+                matsimScenario.getVehicles().addVehicleType(walk);
+            }
+
+            matsimScenario.getConfig().qsim().setVehiclesSource(QSimConfigGroup.VehiclesSource.modeVehicleTypesFromVehiclesData);
+
+            //set up controler
+            final Controler controler = new Controler(matsimScenario);
+            controler.addOverridingModule(new SwissRailRaptorModule());
+            controler.addOverridingModule(new WalkModule());
+            controler.addOverridingModule(new BicycleModule());
+            controler.run();
+            logger.warn("Running MATSim transport model for " + day + " all-modes scenario " + year + " finished.");
+
+            // Get travel Times from MATSim - weekday
+            if(day.equals(Day.thursday)){
+                logger.warn("Using MATSim to compute travel times from zone to zone.");
+                TravelTime travelTime = controler.getLinkTravelTimes();
+                TravelDisutility travelDisutility = controler.getTravelDisutilityFactory().createTravelDisutility(travelTime);
+                updateTravelTimes(travelTime, travelDisutility);
+            }
+        }
+    }
+
+    private void fillAllModesConfig(Config config, int year, Day day) {
+        // Set basic setting
+        config.qsim().setEndTime(24*60*60);
+        config.global().setNumberOfThreads(16);
+        config.qsim().setNumberOfThreads(16);
+        config.routing().setRoutingRandomness(0.);
+
+        // --- Public Transport --- (same setup as finalizeCarTruckConfig)
+        config.network().setInputFile(properties.main.baseDirectory + properties.healthData.multimodalNetwork_file);
+        config.transit().setTransitScheduleFile(properties.main.baseDirectory + properties.healthData.transitSchedule_file);
+        config.transit().setVehiclesFile(properties.main.baseDirectory + properties.healthData.transitVehicles_file);
+        config.transit().setUseTransit(true);
+        config.transit().setUsingTransitInMobsim(true);
+        config.transit().setTransitModes(Set.of("pt"));
+        ConfigUtils.addOrGetModule(config, SwissRailRaptorConfigGroup.class);
+
+        // Set scale factor. One QSim → one flowCapFactor: the car sample governs road
+        // capacity. Bike/walk are teleported and consume no capacity, so the separate
+        // bikePed scale factor no longer applies here.
+        config.qsim().setFlowCapFactor(properties.main.scaleFactor * properties.healthData.matsim_scale_factor_car);
+        config.qsim().setStorageCapFactor(properties.main.scaleFactor * properties.healthData.matsim_scale_factor_car);
+        logger.info("Flow Cap Factor for all modes: " + config.qsim().getFlowCapFactor());
+        logger.info("Storage Cap Factor for all modes: " + config.qsim().getStorageCapFactor());
+
+        // Set output directory
+        final String outputDirectoryRoot = properties.main.baseDirectory + "scenOutput/" + properties.main.scenarioName;
+        String outputDirectory = outputDirectoryRoot + "/matsim/" + year + "/" + day + "/allModes/";
+        config.controller().setRunId(String.valueOf(year));
+        config.controller().setOutputDirectory(outputDirectory);
+        config.controller().setOverwriteFileSetting(OutputDirectoryHierarchy.OverwriteFileSetting.deleteDirectoryIfExists);
+
+        // Iterations: the motorized side needs ~100 iterations to equilibrate congestion and
+        // mode shares; bike/walk converge immediately and ride along at negligible cost.
+        // Innovation is switched off for the last 20% so final mode shares come from stable
+        // selection rather than ongoing experimentation.
+        config.controller().setLastIteration(100);
+        config.replanning().setFractionOfIterationsToDisableInnovation(0.8);
+        config.controller().setWritePlansInterval(Math.max(config.controller().getLastIteration(), 1));
+        config.controller().setWriteEventsInterval(Math.max(config.controller().getLastIteration(), 1));
+
+        // Modes: only car/truck are QSim main modes (pt vehicles are driven by the transit
+        // engine). bike/walk are network routing modes WITHOUT being main modes — the QSim
+        // teleports them along their routed path with the routed travel time. To move them
+        // into the QSim later (e.g. for link-level exposure events), add them to mainModes
+        // and switch to per-person vehicles + SeepageQ.
+        config.qsim().setMainModes(List.of(TransportMode.car, TransportMode.truck));
+        config.routing().setNetworkModes(List.of(TransportMode.car, TransportMode.truck, TransportMode.bike, TransportMode.walk));
+        config.routing().removeModeRoutingParams(TransportMode.bike);
+        config.routing().removeModeRoutingParams(TransportMode.walk);
+        config.routing().setAccessEgressType(RoutingConfigGroup.AccessEgressType.none);
+
+        // --- Scoring ---
+        // All modes are scored in ONE utility scale; the mode constants below are the
+        // calibration knobs. TODO: calibrate constants so the baseline (no-flood) run
+        // reproduces MITO's mode shares before interpreting flood-scenario mode shifts.
+        ModeParams ptParams = config.scoring().getOrCreateModeParams(TransportMode.pt);
+        ptParams.setConstant(0.);
+        ptParams.setMarginalUtilityOfTraveling(-6.0);
+        ptParams.setMarginalUtilityOfDistance(0.);
+        ptParams.setMonetaryDistanceRate(0.);
+
+        ModeParams walkParams = config.scoring().getOrCreateModeParams(TransportMode.walk);
+        walkParams.setConstant(0.);
+        walkParams.setMarginalUtilityOfDistance(-0.0004);
+        walkParams.setMarginalUtilityOfTraveling(-6.0);
+        walkParams.setMonetaryDistanceRate(0.);
+
+        ModeParams bicycleParams = config.scoring().getOrCreateModeParams(TransportMode.bike);
+        bicycleParams.setConstant(0.);
+        bicycleParams.setMarginalUtilityOfDistance(-0.0004);
+        bicycleParams.setMarginalUtilityOfTraveling(-6.0);
+        bicycleParams.setMonetaryDistanceRate(0.);
+
+        // Raptor's transfer walks at the same stop area emit "non_network_walk"; without
+        // its own ModeParams the scoring lookup NPEs. Mirror walk params.
+        ModeParams nonNetworkWalk = new ModeParams("non_network_walk");
+        nonNetworkWalk.setConstant(walkParams.getConstant());
+        nonNetworkWalk.setMarginalUtilityOfTraveling(walkParams.getMarginalUtilityOfTraveling());
+        nonNetworkWalk.setMarginalUtilityOfDistance(walkParams.getMarginalUtilityOfDistance());
+        nonNetworkWalk.setMonetaryDistanceRate(walkParams.getMonetaryDistanceRate());
+        config.scoring().addModeParams(nonNetworkWalk);
+
+        ModeParams carParams = config.scoring().getOrCreateModeParams(TransportMode.car);
+        ModeParams truckParams = new ModeParams(TransportMode.truck);
+        truckParams.setConstant(carParams.getConstant());
+        truckParams.setDailyMonetaryConstant(carParams.getDailyMonetaryConstant());
+        truckParams.setMarginalUtilityOfDistance(carParams.getMarginalUtilityOfDistance());
+        truckParams.setDailyUtilityConstant(carParams.getDailyUtilityConstant());
+        truckParams.setMonetaryDistanceRate(carParams.getMonetaryDistanceRate());
+        config.scoring().addModeParams(truckParams);
+
+        // Activity params (guarded — the base config file may already define them)
+        Map<String, Double> typicalDurations = Map.of(
+                "home", 12. * 60 * 60,
+                "work", 8. * 60 * 60,
+                "education", 8. * 60 * 60,
+                "shopping", 1. * 60 * 60,
+                "recreation", 1. * 60 * 60,
+                "other", 1. * 60 * 60,
+                "airport", 1. * 60 * 60);
+        for (Map.Entry<String, Double> e : typicalDurations.entrySet()) {
+            if (config.scoring().getActivityParams(e.getKey()) == null) {
+                config.scoring().addActivityParams(
+                        new ScoringConfigGroup.ActivityParams(e.getKey()).setTypicalDuration(e.getValue()));
+            }
+        }
+
+        // --- JIBE bike/walk routing inputs (as in fillBikePedConfig) ---
+        // Flood hook: water-depth sensitivity for active modes goes here later — add a
+        // l -> waterDepth(l) term with a calibrated weight so flooded links are avoided,
+        // plus a depth-dependent speed in the link speed calculators for the time effect.
+
+        // BIKE ATTRIBUTES
+        List<ToDoubleFunction<Link>> bikeAttributes = new ArrayList<>();
+        bikeAttributes.add(l -> Math.max(Math.min(Gradient.getGradient(l),0.5),0.));
+        bikeAttributes.add(l -> LinkStress.getStress(l,TransportMode.bike));
+
+        // Bike weights
+        Function<Person,double[]> bikeWeights = p -> {
+            switch((Purpose) p.getAttributes().getAttribute("purpose")) {
+                case HBW -> {
+                    if(p.getAttributes().getAttribute("sex").equals(MitoGender.FEMALE)) {
+                        return new double[] {35.9032908,2.3084587 + 2.7762033};
+                    } else {
+                        return new double[] {35.9032908,2.3084587};
+                    }
+                }
+                case HBE -> {
+                    return new double[] {0,4.3075357};
+                }
+                case HBS, HBR, HBO -> {
+                    if((int) p.getAttributes().getAttribute("age") < 15) {
+                        return new double[] {57.0135325,1.2411983 + 6.4243251};
+                    } else {
+                        return new double[] {57.0135325,1.2411983};
+                    }
+                }
+                default -> {
+                    return null;
+                }
+            }
+        };
+
+        // Bicycle config group
+        BicycleConfigGroup bicycle = (BicycleConfigGroup) config.getModules().get(BicycleConfigGroup.GROUP_NAME);
+        bicycle.setAttributes(bikeAttributes);
+        bicycle.setWeights(bikeWeights);
+
+        // WALK ATTRIBUTES
+        List<ToDoubleFunction<Link>> walkAttributes = new ArrayList<>();
+        walkAttributes.add(l -> Math.max(0.,0.81 - LinkAmbience.getVgviFactor(l)));
+        walkAttributes.add(l -> Math.min(1.,((double) l.getAttributes().getAttribute("speedLimitMPH")) / 50.));
+        walkAttributes.add(l -> JctStress.getStressProp(l,TransportMode.walk));
+
+        // Walk weights
+        Function<Person,double[]> walkWeights = p -> {
+            switch ((Purpose) p.getAttributes().getAttribute("purpose")) {
+                case HBW -> {
+                    return new double[]{0.3307472, 0, 4.9887390};
+                }
+                case HBE -> {
+                    return new double[]{0, 0, 1.0037846};
+                }
+                case HBS, HBR, HBO -> {
+                    if ((int) p.getAttributes().getAttribute("age") < 15) {
+                        return new double[]{0.7789561, 0.4479527 + 2.0418898, 5.8219067};
+                    } else if ((int) p.getAttributes().getAttribute("age") >= 65) {
+                        return new double[]{0.7789561, 0.4479527 + 0.3715017, 5.8219067};
+                    } else {
+                        return new double[]{0.7789561, 0.4479527, 5.8219067};
+                    }
+                }
+                case HBA -> {
+                    return new double[]{0.6908324, 0, 0};
+                }
+                case NHBO -> {
+                    return new double[]{0, 3.4485883, 0};
+                }
+                default -> {
+                    return null;
+                }
+            }
+        };
+
+        // Walk config group
+        WalkConfigGroup walkConfigGroup = (WalkConfigGroup) config.getModules().get(WalkConfigGroup.GROUP_NAME);
+        walkConfigGroup.setAttributes(walkAttributes);
+        walkConfigGroup.setWeights(walkWeights);
+
+        // --- Replanning: strategies per subpopulation ---
+        config.replanning().setMaxAgentPlanMemorySize(5);
+        config.replanning().clearStrategySettings();
+
+        // Persons: mode choice across car/pt/bike/walk. ChangeTripMode flips ALL legs of a
+        // plan to one randomly drawn mode and re-routes — the right innovator here because
+        // each MITO-assembled MATSim person carries exactly one trip (home-based trips as
+        // closed home→activity→home tours), so tours stay mode-consistent and open NHB
+        // plans are covered too (SubtourModeChoice would silently skip those).
+        {
+            ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
+            strategySettings.setStrategyName("ChangeExpBeta");
+            strategySettings.setWeight(0.7);
+            strategySettings.setSubpopulation(SUBPOP_PERSON);
+            config.replanning().addStrategySettings(strategySettings);
+        }
+        {
+            ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
+            strategySettings.setStrategyName("ChangeTripMode");
+            strategySettings.setWeight(0.15);
+            strategySettings.setSubpopulation(SUBPOP_PERSON);
+            config.replanning().addStrategySettings(strategySettings);
+        }
+        {
+            ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
+            strategySettings.setStrategyName("ReRoute");
+            strategySettings.setWeight(0.15);
+            strategySettings.setSubpopulation(SUBPOP_PERSON);
+            config.replanning().addStrategySettings(strategySettings);
+        }
+
+        // Freight: fixed mode, may only re-route
+        {
+            ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
+            strategySettings.setStrategyName("ChangeExpBeta");
+            strategySettings.setWeight(0.85);
+            strategySettings.setSubpopulation(SUBPOP_FREIGHT);
+            config.replanning().addStrategySettings(strategySettings);
+        }
+        {
+            ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
+            strategySettings.setStrategyName("ReRoute");
+            strategySettings.setWeight(0.15);
+            strategySettings.setSubpopulation(SUBPOP_FREIGHT);
+            config.replanning().addStrategySettings(strategySettings);
+        }
+
+        config.changeMode().setModes(new String[]{TransportMode.car, TransportMode.pt, TransportMode.bike, TransportMode.walk});
+        // TODO MITO persons carry no car-availability attribute yet; until one is added,
+        // every agent may choose car.
+        config.changeMode().setIgnoreCarAvailability(true);
+    }
+
+    /**
+     * Population-average maximum speed over all genders and ages, used for the mode-level
+     * bike/walk vehicle types of the all-modes run.
+     */
+    private double averageMaxSpeed(Mode mode) {
+        return ((DataContainerHealth) dataContainer).getAvgSpeeds().get(mode).values().stream()
+                .flatMap(byAge -> byAge.values().stream())
+                .mapToDouble(Double::doubleValue)
+                .average()
+                .orElseThrow(() -> new RuntimeException("No average speeds available for mode " + mode));
     }
 
     private void fillBikePedConfig(Config bikePedConfig, int year, Day day) {
