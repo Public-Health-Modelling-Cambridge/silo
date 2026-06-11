@@ -385,18 +385,27 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
                         + ") moved to car queue with scaled PCU " + vt.getPcuEquivalents());
             }
 
-            //set vehicle types
-            VehicleType car = VehicleUtils.getFactory().createVehicleType(Id.create(TransportMode.car, VehicleType.class));
-            car.setPcuEquivalents(1.);
-            car.setLength(7.5);
-            car.setNetworkMode(TransportMode.car);
-            matsimScenario.getVehicles().addVehicleType(car);
+            //set vehicle types — the base config's vehicles file (vehicletypes.xml) may already
+            //define car/truck, which ScenarioUtils.loadScenario loads into the scenario. Only add
+            //them when absent, otherwise addVehicleType throws "Vehicle type with id = car already
+            //exists". When present, the file's definitions are authoritative (modeVehicleTypesFromVehiclesData).
+            Id<VehicleType> carTypeId = Id.create(TransportMode.car, VehicleType.class);
+            if (!matsimScenario.getVehicles().getVehicleTypes().containsKey(carTypeId)) {
+                VehicleType car = VehicleUtils.getFactory().createVehicleType(carTypeId);
+                car.setPcuEquivalents(1.);
+                car.setLength(7.5);
+                car.setNetworkMode(TransportMode.car);
+                matsimScenario.getVehicles().addVehicleType(car);
+            }
 
-            VehicleType truck = VehicleUtils.getFactory().createVehicleType(Id.create(TransportMode.truck, VehicleType.class));
-            truck.setPcuEquivalents(2.5);
-            truck.setLength(15.);
-            truck.setNetworkMode(TransportMode.truck);
-            matsimScenario.getVehicles().addVehicleType(truck);
+            Id<VehicleType> truckTypeId = Id.create(TransportMode.truck, VehicleType.class);
+            if (!matsimScenario.getVehicles().getVehicleTypes().containsKey(truckTypeId)) {
+                VehicleType truck = VehicleUtils.getFactory().createVehicleType(truckTypeId);
+                truck.setPcuEquivalents(2.5);
+                truck.setLength(15.);
+                truck.setNetworkMode(TransportMode.truck);
+                matsimScenario.getVehicles().addVehicleType(truck);
+            }
 
             matsimScenario.getConfig().qsim().setVehiclesSource(QSimConfigGroup.VehiclesSource.modeVehicleTypesFromVehiclesData);
 
