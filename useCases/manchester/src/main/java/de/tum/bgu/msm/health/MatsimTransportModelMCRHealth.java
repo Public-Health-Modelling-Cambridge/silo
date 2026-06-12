@@ -644,8 +644,8 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         // Set scale factor. One QSim → one flowCapFactor: the car sample governs road
         // capacity. Bike/walk are teleported and consume no capacity, so the separate
         // bikePed scale factor no longer applies here.
-        config.qsim().setFlowCapFactor(properties.main.scaleFactor * properties.healthData.matsim_scale_factor_car);
-        config.qsim().setStorageCapFactor(properties.main.scaleFactor * properties.healthData.matsim_scale_factor_car);
+        config.qsim().setFlowCapFactor(properties.main.scaleFactor * properties.transportModel.matsimScaleFactor);
+        config.qsim().setStorageCapFactor(properties.main.scaleFactor * properties.transportModel.matsimScaleFactor);
         logger.info("Flow Cap Factor for all modes: " + config.qsim().getFlowCapFactor());
         logger.info("Storage Cap Factor for all modes: " + config.qsim().getStorageCapFactor());
 
