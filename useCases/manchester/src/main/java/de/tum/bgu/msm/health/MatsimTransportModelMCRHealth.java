@@ -628,7 +628,12 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         config.transit().setTransitScheduleFile(properties.main.baseDirectory + properties.healthData.transitSchedule_file);
         config.transit().setVehiclesFile(properties.main.baseDirectory + properties.healthData.transitVehicles_file);
         config.transit().setUseTransit(true);
-        config.transit().setUsingTransitInMobsim(true);
+        // DIAGNOSTIC (2026-06-12): transit vehicles temporarily OUT of the QSim to test whether
+        // the mass of agents still en route at 24:00 is caused by buses congesting the
+        // 10%-capacity car queue. PT legs are still routed by raptor and teleported on
+        // schedule times, so mode choice keeps working — but buses add no road load and feel
+        // no congestion. Restore setUsingTransitInMobsim(true) after the test.
+        config.transit().setUsingTransitInMobsim(false);
         config.transit().setTransitModes(Set.of("pt"));
         ConfigUtils.addOrGetModule(config, SwissRailRaptorConfigGroup.class);
 
