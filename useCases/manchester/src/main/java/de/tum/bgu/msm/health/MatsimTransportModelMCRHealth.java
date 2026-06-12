@@ -651,7 +651,7 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         // mode shares; bike/walk converge immediately and ride along at negligible cost.
         // Innovation is switched off for the last 20% so final mode shares come from stable
         // selection rather than ongoing experimentation.
-        config.controller().setLastIteration(100);
+        //config.controller().setLastIteration(100);
         config.replanning().setFractionOfIterationsToDisableInnovation(0.8);
         config.controller().setWritePlansInterval(Math.max(config.controller().getLastIteration(), 1));
         config.controller().setWriteEventsInterval(Math.max(config.controller().getLastIteration(), 1));
