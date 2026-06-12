@@ -532,22 +532,26 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
             new CreateVehiclesForSchedule(matsimScenario.getTransitSchedule(),
                                           matsimScenario.getTransitVehicles()).run();
 
-            // Road-running PT shares the car queue (see runCarTruckSimulation for the full
-            // rationale): networkMode=car + PCU scaled by the car sample factor; trams/rail
-            // stay on dedicated links untouched.
-            double carSampleFactor = properties.healthData.matsim_scale_factor_car;
+            // Road-running PT rides in the car queue (networkMode=car) so buses EXPERIENCE car
+            // congestion — but with PCU 0 they add NO load (no flow/storage consumption).
+            // Rationale: link capacities were calibrated against observed (Google Maps) car
+            // travel times with only cars+trucks simulated, so the congestion effect of real
+            // buses is already baked into the effective link parameters. Explicit buses with
+            // positive PCU would double-count that load (and at 10% storage capacity, gridlock
+            // short urban links). One-way coupling — cars delay buses, buses don't delay cars —
+            // matches the calibration assumption. Trams/rail stay on dedicated links untouched.
             Set<String> dedicatedPtModes = Set.of("tram", "rail", "train", "subway", "ferry");
             for (VehicleType vt : matsimScenario.getTransitVehicles().getVehicleTypes().values()) {
                 String netMode = vt.getNetworkMode();
                 if (netMode != null && dedicatedPtModes.contains(netMode.toLowerCase())) {
                     logger.info("PT vehicle type " + vt.getId() + " kept on dedicated networkMode=" + netMode
-                            + " (no PCU scaling, no car-queue interaction).");
+                            + " (no car-queue interaction).");
                     continue;
                 }
                 vt.setNetworkMode(TransportMode.car);
-                vt.setPcuEquivalents(vt.getPcuEquivalents() * carSampleFactor);
+                vt.setPcuEquivalents(0.);
                 logger.info("PT vehicle type " + vt.getId() + " (was networkMode=" + netMode
-                        + ") moved to car queue with scaled PCU " + vt.getPcuEquivalents());
+                        + ") moved to car queue with PCU 0 (experiences congestion, adds no load).");
             }
 
             // Mode-level vehicle types. With modeVehicleTypesFromVehiclesData the QSim builds
