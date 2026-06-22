@@ -88,7 +88,8 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
     private static final Logger logger = LogManager.getLogger(MatsimTransportModelMCRHealth.class);
 
     // Subpopulations steer replanning only (scoring falls back to the default parameter set):
-    // "person" agents may switch mode, "freight" (trucks + through traffic) may only re-route.
+    // both "person" agents and "freight" (trucks + through traffic) keep their fixed mode and
+    // may only re-route / re-time. No mode choice is performed.
     private static final String SUBPOP_PERSON = "person";
     private static final String SUBPOP_FREIGHT = "freight";
 
@@ -508,8 +509,8 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
 
             logger.warn("MATSim truck/through population: " + day + "|" + year + "|" + population.getPersons().size());
 
-            // Add ALL MITO persons — no mode filter: MITO's chosen mode is only the starting
-            // point, agents may switch among car/pt/bike/walk during replanning.
+            // Add ALL MITO persons — no mode filter. Each agent KEEPS its MITO-chosen mode
+            // (car/pt/bike/walk); replanning only re-routes and re-times, never re-modes.
             for (Person pp : assembledScenario.getPopulation().getPersons().values()) {
                 PopulationUtils.putSubpopulation(pp, SUBPOP_PERSON);
                 population.addPerson(pp);
@@ -818,14 +819,17 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         walkConfigGroup.setWeights(walkWeights);
 
         // --- Replanning: strategies per subpopulation ---
+        // NO mode choice anywhere: every agent keeps its fixed (MITO-assigned / freight) mode.
+        // Innovation is restricted to ReRoute (route shifts) and TimeAllocationMutator (departure
+        // time adjustments); ChangeExpBeta is the plan selector that lets the equilibrium settle.
         config.replanning().setMaxAgentPlanMemorySize(5);
         config.replanning().clearStrategySettings();
 
-        // Persons: mode choice across car/pt/bike/walk. ChangeTripMode flips ALL legs of a
-        // plan to one randomly drawn mode and re-routes — the right innovator here because
-        // each MITO-assembled MATSim person carries exactly one trip (home-based trips as
-        // closed home→activity→home tours), so tours stay mode-consistent and open NHB
-        // plans are covered too (SubtourModeChoice would silently skip those).
+        // Departure-time mutation range (±) for TimeAllocationMutator, in seconds.
+        config.timeAllocationMutator().setMutationRange(1800.);
+        config.timeAllocationMutator().setAffectingDuration(false);
+
+        // Persons: route + time only, no re-moding.
         {
             ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
             strategySettings.setStrategyName("ChangeExpBeta");
@@ -835,24 +839,24 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         }
         {
             ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
-            strategySettings.setStrategyName("ChangeTripMode");
+            strategySettings.setStrategyName("ReRoute");
             strategySettings.setWeight(0.15);
             strategySettings.setSubpopulation(SUBPOP_PERSON);
             config.replanning().addStrategySettings(strategySettings);
         }
         {
             ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
-            strategySettings.setStrategyName("ReRoute");
+            strategySettings.setStrategyName("TimeAllocationMutator");
             strategySettings.setWeight(0.15);
             strategySettings.setSubpopulation(SUBPOP_PERSON);
             config.replanning().addStrategySettings(strategySettings);
         }
 
-        // Freight: fixed mode, may only re-route
+        // Freight: fixed mode, route + time only
         {
             ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
             strategySettings.setStrategyName("ChangeExpBeta");
-            strategySettings.setWeight(0.85);
+            strategySettings.setWeight(0.7);
             strategySettings.setSubpopulation(SUBPOP_FREIGHT);
             config.replanning().addStrategySettings(strategySettings);
         }
@@ -863,11 +867,13 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
             strategySettings.setSubpopulation(SUBPOP_FREIGHT);
             config.replanning().addStrategySettings(strategySettings);
         }
-
-        config.changeMode().setModes(new String[]{TransportMode.car, TransportMode.pt, TransportMode.bike, TransportMode.walk});
-        // TODO MITO persons carry no car-availability attribute yet; until one is added,
-        // every agent may choose car.
-        config.changeMode().setIgnoreCarAvailability(true);
+        {
+            ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
+            strategySettings.setStrategyName("TimeAllocationMutator");
+            strategySettings.setWeight(0.15);
+            strategySettings.setSubpopulation(SUBPOP_FREIGHT);
+            config.replanning().addStrategySettings(strategySettings);
+        }
     }
 
     /**
