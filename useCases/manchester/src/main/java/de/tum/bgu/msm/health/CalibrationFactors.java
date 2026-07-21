@@ -67,13 +67,13 @@ public class CalibrationFactors {
                 } else if(scenario.equals("goDutch")){
                     switch (mode) {
                         case "Bike":
-                            modeFactors.put(mode, 1.0508308);
+                            modeFactors.put(mode, 0.9791006);
                             break;
                         case "Car":
-                            modeFactors.put(mode, 2.1272710);
+                            modeFactors.put(mode, 2.1350775);
                             break;
                         case "Walk":
-                            modeFactors.put(mode, 0.8126129);
+                            modeFactors.put(mode, 0.8163412);
                             break;
                     }
                 } else {
