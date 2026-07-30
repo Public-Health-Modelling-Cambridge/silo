@@ -200,7 +200,7 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         //runCarTruckSimulation(year, assembledMultiScenario);
 
         //run bike ped simulation
-        //runBikePedSimulation(year, assembledMultiScenario);
+        // runBikePedSimulation(year, assembledMultiScenario);
     }
 
     private void runBikePedSimulation(int year, Map<Day, Scenario> assembledMultiScenario) {
@@ -685,21 +685,21 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         // calibration knobs. TODO: calibrate constants so the baseline (no-flood) run
         // reproduces MITO's mode shares before interpreting flood-scenario mode shifts.
         ModeParams ptParams = config.scoring().getOrCreateModeParams(TransportMode.pt);
-        ptParams.setConstant(0.);
-        ptParams.setMarginalUtilityOfTraveling(-6.0);
+        ptParams.setConstant(-3.13614);
+        ptParams.setMarginalUtilityOfTraveling((-0.03967 + 0.19584) * 60);
         ptParams.setMarginalUtilityOfDistance(0.);
-        ptParams.setMonetaryDistanceRate(0.);
+        ptParams.setMonetaryDistanceRate(-0.0001);
 
         ModeParams walkParams = config.scoring().getOrCreateModeParams(TransportMode.walk);
-        walkParams.setConstant(0.);
-        walkParams.setMarginalUtilityOfDistance(-0.0004);
-        walkParams.setMarginalUtilityOfTraveling(-6.0);
+        walkParams.setConstant(0.55988);
+        walkParams.setMarginalUtilityOfDistance(0.);
+        walkParams.setMarginalUtilityOfTraveling((-0.14696 + 0.19584) * 60);
         walkParams.setMonetaryDistanceRate(0.);
 
         ModeParams bicycleParams = config.scoring().getOrCreateModeParams(TransportMode.bike);
-        bicycleParams.setConstant(0.);
-        bicycleParams.setMarginalUtilityOfDistance(-0.0004);
-        bicycleParams.setMarginalUtilityOfTraveling(-6.0);
+        bicycleParams.setConstant(-4.42678);
+        bicycleParams.setMarginalUtilityOfDistance(0.0);
+        bicycleParams.setMarginalUtilityOfTraveling((-0.10111 + 0.19584) * 60);
         bicycleParams.setMonetaryDistanceRate(0.);
 
         // Raptor's transfer walks at the same stop area emit "non_network_walk"; without
@@ -712,6 +712,11 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         config.scoring().addModeParams(nonNetworkWalk);
 
         ModeParams carParams = config.scoring().getOrCreateModeParams(TransportMode.car);
+        carParams.setConstant(0.);
+        carParams.setMarginalUtilityOfTraveling(0.);
+        carParams.setMarginalUtilityOfDistance(0.);
+        carParams.setMonetaryDistanceRate(-0.00015);
+
         ModeParams truckParams = new ModeParams(TransportMode.truck);
         truckParams.setConstant(carParams.getConstant());
         truckParams.setDailyMonetaryConstant(carParams.getDailyMonetaryConstant());
@@ -719,6 +724,13 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         truckParams.setDailyUtilityConstant(carParams.getDailyUtilityConstant());
         truckParams.setMonetaryDistanceRate(carParams.getMonetaryDistanceRate());
         config.scoring().addModeParams(truckParams);
+
+        double betaTravelCar = 0.19584 * 60;
+
+        config.scoring().setPerforming_utils_hr(0.19584 * 60);
+        config.scoring().setMarginalUtilityOfMoney(0.31718);
+        config.scoring().setMarginalUtlOfWaitingPt_utils_hr(-2 * betaTravelCar);
+        config.scoring().setLateArrival_utils_hr(-3 * betaTravelCar);
 
         // Activity params (guarded — the base config file may already define them)
         Map<String, Double> typicalDurations = Map.of(
