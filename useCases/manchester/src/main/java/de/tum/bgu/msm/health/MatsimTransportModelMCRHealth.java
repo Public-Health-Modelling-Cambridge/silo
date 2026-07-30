@@ -87,9 +87,9 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
 
     private static final Logger logger = LogManager.getLogger(MatsimTransportModelMCRHealth.class);
 
-    // Subpopulations steer replanning only (scoring falls back to the default parameter set):
-    // both "person" agents and "freight" (trucks + through traffic) keep their fixed mode and
-    // may only re-route / re-time. No mode choice is performed.
+    // Subpopulations steer replanning: "person" agents perform mode choice (SubtourModeChoice)
+    // on top of re-routing / re-timing, so car/pt/walk/bike compete within MATSim. "freight"
+    // (trucks + through traffic) keep their fixed mode and may only re-route / re-time.
     private static final String SUBPOP_PERSON = "person";
     private static final String SUBPOP_FREIGHT = "freight";
 
@@ -439,7 +439,7 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
     /**
      * One integrated simulation for all modes, replacing the separate runCarTruckSimulation /
      * runBikePedSimulation pair so that car, pt, bike and walk compete against each other
-     * (mode choice via ChangeTripMode replanning).
+     * (mode choice via SubtourModeChoice replanning).
      *
      * Teleport variant for active modes: bike/walk are network-ROUTED with the JIBE travel
      * times and disutilities, but they are not QSim main modes — the QSim teleports them along
@@ -509,8 +509,8 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
 
             logger.warn("MATSim truck/through population: " + day + "|" + year + "|" + population.getPersons().size());
 
-            // Add ALL MITO persons — no mode filter. Each agent KEEPS its MITO-chosen mode
-            // (car/pt/bike/walk); replanning only re-routes and re-times, never re-modes.
+            // Add ALL MITO persons — no mode filter. Each agent STARTS from its MITO-chosen mode
+            // (car/pt/bike/walk); SubtourModeChoice replanning then lets them switch modes.
             for (Person pp : assembledScenario.getPopulation().getPersons().values()) {
                 PopulationUtils.putSubpopulation(pp, SUBPOP_PERSON);
                 population.addPerson(pp);
@@ -661,7 +661,7 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         // mode shares; bike/walk converge immediately and ride along at negligible cost.
         // Innovation is switched off for the last 20% so final mode shares come from stable
         // selection rather than ongoing experimentation.
-        //config.controller().setLastIteration(100);
+        config.controller().setLastIteration(100);
         config.replanning().setFractionOfIterationsToDisableInnovation(0.8);
         config.controller().setWritePlansInterval(Math.max(config.controller().getLastIteration(), 1));
         config.controller().setWriteEventsInterval(Math.max(config.controller().getLastIteration(), 1));
@@ -831,9 +831,10 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         walkConfigGroup.setWeights(walkWeights);
 
         // --- Replanning: strategies per subpopulation ---
-        // NO mode choice anywhere: every agent keeps its fixed (MITO-assigned / freight) mode.
-        // Innovation is restricted to ReRoute (route shifts) and TimeAllocationMutator (departure
-        // time adjustments); ChangeExpBeta is the plan selector that lets the equilibrium settle.
+        // Persons perform mode choice (SubtourModeChoice) so car/pt/walk/bike compete, plus
+        // ReRoute (route shifts) and TimeAllocationMutator (departure-time adjustments);
+        // ChangeExpBeta is the plan selector that lets the equilibrium settle. Freight keeps its
+        // fixed mode (no SubtourModeChoice) and may only re-route / re-time.
         config.replanning().setMaxAgentPlanMemorySize(5);
         config.replanning().clearStrategySettings();
 
@@ -841,11 +842,31 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         config.timeAllocationMutator().setMutationRange(1800.);
         config.timeAllocationMutator().setAffectingDuration(false);
 
-        // Persons: route + time only, no re-moding.
+        // Mode choice (persons only): SubtourModeChoice swaps the mode of whole home-based
+        // subtours among the four competing modes. car and bike are chain-based (must return to
+        // where they were left) so an agent cannot abandon a vehicle mid-chain. Car availability
+        // is not yet restricted per person — enable considerCarAvailability once a "carAvail"
+        // person attribute is present, otherwise every agent may choose car.
+        config.subtourModeChoice().setModes(new String[]{
+                TransportMode.car, TransportMode.pt, TransportMode.walk, TransportMode.bike});
+        config.subtourModeChoice().setChainBasedModes(new String[]{
+                TransportMode.car, TransportMode.bike});
+        config.subtourModeChoice().setConsiderCarAvailability(false);
+
+        // Persons: mode choice + route + time.
         {
             ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
             strategySettings.setStrategyName("ChangeExpBeta");
             strategySettings.setWeight(0.7);
+            strategySettings.setSubpopulation(SUBPOP_PERSON);
+            config.replanning().addStrategySettings(strategySettings);
+        }
+        {
+            // Proportion of persons attempting a mode switch each iteration (0.15 is the
+            // conventional starting value). Lower it once mode shares are calibrated.
+            ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
+            strategySettings.setStrategyName("SubtourModeChoice");
+            strategySettings.setWeight(0.15);
             strategySettings.setSubpopulation(SUBPOP_PERSON);
             config.replanning().addStrategySettings(strategySettings);
         }
