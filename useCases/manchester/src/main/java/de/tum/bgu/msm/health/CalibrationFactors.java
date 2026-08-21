@@ -19,37 +19,37 @@ public class CalibrationFactors {
                 if (scenario.equals("base")) {
                     switch (mode) {
                         case "Bike":
-                            modeFactors.put(mode, 2.301601915);
+                            modeFactors.put(mode, 2.4140595);
                             break;
                         case "Car":
-                            modeFactors.put(mode, 2.01235657546337);
+                            modeFactors.put(mode, 1.4307229);
                             break;
                         case "Walk":
-                            modeFactors.put(mode, 0.741037452);
+                            modeFactors.put(mode, 0.7442796);
                             break;
                     }
                 } else if(scenario.equals("safeStreet")){
                     switch (mode) {
                         case "Bike":
-                            modeFactors.put(mode, 1.583259223);
+                            modeFactors.put(mode, 1.5240304);
                             break;
                         case "Car":
-                            modeFactors.put(mode, 2.056126119);
+                            modeFactors.put(mode, 2.1175477);
                             break;
                         case "Walk":
-                            modeFactors.put(mode, 0.734002674);
+                            modeFactors.put(mode, 0.7359706);
                             break;
                     }
                 } else if(scenario.equals("green")){
                     switch (mode) {
                         case "Bike":
-                            modeFactors.put(mode, 2.373450201);
+                            modeFactors.put(mode, 2.4899862);
                             break;
                         case "Car":
-                            modeFactors.put(mode, 2.019559765);
+                            modeFactors.put(mode, 2.0792794);
                             break;
                         case "Walk":
-                            modeFactors.put(mode, 0.720561993);
+                            modeFactors.put(mode, 0.7222587);
                             break;
                     }
                 } else if(scenario.equals("both")){
@@ -67,13 +67,13 @@ public class CalibrationFactors {
                 } else if(scenario.equals("goDutch")){
                     switch (mode) {
                         case "Bike":
-                            modeFactors.put(mode, 0.9791006);
+                            modeFactors.put(mode, 0.9795538);
                             break;
                         case "Car":
-                            modeFactors.put(mode, 2.1350775);
+                            modeFactors.put(mode, 2.1643528);
                             break;
                         case "Walk":
-                            modeFactors.put(mode, 0.8163412);
+                            modeFactors.put(mode, 0.8166055);
                             break;
                     }
                 } else {
