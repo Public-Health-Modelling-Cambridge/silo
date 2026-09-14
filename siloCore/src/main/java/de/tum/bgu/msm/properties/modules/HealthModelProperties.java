@@ -15,6 +15,7 @@ public class HealthModelProperties {
     public final String transitSchedule_file;
     public final String transitVehicles_file;
     public final String multimodalNetwork_file;
+    public final String networkChangeEvents_file;
 
     public final double matsim_scale_factor_car;
     public final double matsim_scale_factor_bikePed;
@@ -63,6 +64,10 @@ public class HealthModelProperties {
         transitVehicles_file = PropertiesUtil.getStringProperty(bundle, "transit.vehicles.file", "input/pt/transitVehicles.xml");
 
         multimodalNetwork_file = PropertiesUtil.getStringProperty(bundle, "multimodal.network.file", "input/pt/multimodal_network.xml.gz");
+
+        // Applied in the second stage of the all-modes MATSim run only (iterations 100-200),
+        // so that agents first reach equilibrium on the undisrupted network.
+        networkChangeEvents_file = PropertiesUtil.getStringProperty(bundle, "network.change.events.file", "input/mito/trafficAssignment/flood_networkChangeEvents.xml");
 
         matsim_scale_factor_car = PropertiesUtil.getDoubleProperty(bundle, "matsim.scale.factor.car", 0.1);
 

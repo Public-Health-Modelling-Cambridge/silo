@@ -74,6 +74,10 @@ import routing.components.LinkAmbience;
 import routing.components.LinkStress;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.ToDoubleFunction;
@@ -92,6 +96,35 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
     // (trucks + through traffic) keep their fixed mode and may only re-route / re-time.
     private static final String SUBPOP_PERSON = "person";
     private static final String SUBPOP_FREIGHT = "freight";
+
+    // The all-modes run is split into two sequential Controler stages that write into ONE
+    // output directory (.../allModes/), so ITERS/it.0 ... ITERS/it.200 form a single
+    // continuous series and the iteration number alone says which regime an iteration
+    // belongs to:
+    //   STAGE_BASE      iterations 0..100   undisrupted network — agents reach equilibrium
+    //   STAGE_DISRUPTED iterations 101..200 network change events active — agents re-adapt,
+    //                                       warm-started from the stage-1 output plans so
+    //                                       plan memory and scores carry over.
+    // Stage 2 starts at 101, not 100, so it does not overwrite ITERS/it.100 — the converged
+    // base iteration that the disrupted series is compared against.
+    private static final int STAGE_BASE = 1;
+    private static final int STAGE_DISRUPTED = 2;
+    private static final int FIRST_ITERATION_BASE = 0;
+    private static final int LAST_ITERATION_BASE = 100;
+    private static final int FIRST_ITERATION_DISRUPTED = LAST_ITERATION_BASE + 1;
+    // TODO testing only — restore to 200 (100 disrupted iterations) before any production run.
+    // 120 gives 20 disrupted iterations: iteration 101 is the pure shock (flooded network, base
+    // plans unchanged), rerouting relieves most of it within ~15, and innovation switches off at
+    // 116 so the production code path is exercised. Mode shares will have started moving but not
+    // settled.
+    private static final int LAST_ITERATION_DISRUPTED = 120;
+
+    // Stage 2 writes its own <runId>.scorestats.csv / modestats.csv into the shared output
+    // directory, so stage 1's are copied aside as "<runId>.base_*" to keep the 0-100 history.
+    // The plans are NOT copied: stage 2 warm-starts from stage 1's own iteration dump (see
+    // basePlansFile), which MATSim writes and stage 2 never touches.
+    private static final List<String> BASE_OUTPUTS_TO_PRESERVE =
+            List.of("scorestats.csv", "modestats.csv");
 
     private final Properties properties;
     private final Config initialMatsimConfig;
@@ -518,15 +551,70 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
 
             logger.warn("MATSim all-modes population: " + day + "|" + year + "|" + population.getPersons().size());
 
-            logger.warn("Running MATSim transport model for " + day + " all-modes scenario " + year + ".");
+            // --- Two-stage run, single output directory --------------------------------
+            // Stage 1 lets agents reach equilibrium on the undisrupted network; stage 2 then
+            // switches the network change events on and observes how they re-adapt. Both write
+            // into .../allModes/, so ITERS/ holds one continuous 0..200 series. Stage 1 is
+            // SKIPPED when a base run is already on disk — only the disrupted stage is rerun.
+            String outputDirectory = allModesOutputDirectory(year, day);
+            String basePlansFile = basePlansFile(outputDirectory, year);
+
+            if (!new File(basePlansFile).exists()) {
+                logger.warn("Running MATSim stage 1 (iterations " + FIRST_ITERATION_BASE + "-" + LAST_ITERATION_BASE
+                        + ", undisrupted network) for " + day + " all-modes scenario " + year + ".");
+                runAllModesStage(year, day, STAGE_BASE, population, null);
+            } else {
+                logger.warn("Base run found (" + basePlansFile + ") — skipping iterations "
+                        + FIRST_ITERATION_BASE + "-" + LAST_ITERATION_BASE + " and warm-starting stage 2 from it.");
+            }
+            preserveBaseOutputs(outputDirectory, year);
+
+            logger.warn("Running MATSim stage 2 (iterations " + FIRST_ITERATION_DISRUPTED + "-" + LAST_ITERATION_DISRUPTED
+                    + ", network change events active) for " + day + " all-modes scenario " + year + ".");
+            final Controler controler = runAllModesStage(year, day, STAGE_DISRUPTED, null, basePlansFile);
+
+            logger.warn("Running MATSim transport model for " + day + " all-modes scenario " + year + " finished.");
+
+            // Get travel Times from MATSim - weekday. Taken from stage 2, i.e. the disrupted
+            // network is what feeds back into SILO's zone-to-zone travel times.
+            if(day.equals(Day.thursday)){
+                logger.warn("Using MATSim to compute travel times from zone to zone.");
+                TravelTime travelTime = controler.getLinkTravelTimes();
+                TravelDisutility travelDisutility = controler.getTravelDisutilityFactory().createTravelDisutility(travelTime);
+                updateTravelTimes(travelTime, travelDisutility);
+            }
+        }
+    }
+
+    /**
+     * Runs one stage of the all-modes simulation and returns the finished Controler.
+     *
+     * @param stage              {@link #STAGE_BASE} (undisrupted, iterations 0..100) or
+     *                           {@link #STAGE_DISRUPTED} (network change events, 100..200).
+     * @param population         population to simulate; pass null for a warm-started stage, where
+     *                           the population comes from {@code warmStartPlansFile} instead.
+     * @param warmStartPlansFile output plans of the preceding stage, or null to start from
+     *                           {@code population}. Subpopulation attributes are persisted in the
+     *                           plans file, so the per-subpopulation strategies still bind.
+     */
+    private Controler runAllModesStage(int year, Day day, int stage, Population population, String warmStartPlansFile) {
+
             Config allModesConfig = ConfigUtils.loadConfig(initialMatsimConfig.getContext());
             allModesConfig.addModule(new BicycleConfigGroup());
             allModesConfig.addModule(new WalkConfigGroup());
-            fillAllModesConfig(allModesConfig, year, day);
+            fillAllModesConfig(allModesConfig, year, day, stage);
+
+            if (warmStartPlansFile != null) {
+                allModesConfig.plans().setInputFile(warmStartPlansFile);
+            }
 
             //initialize scenario
             MutableScenario matsimScenario = (MutableScenario) ScenarioUtils.loadScenario(allModesConfig);
-            matsimScenario.setPopulation(population);
+            if (warmStartPlansFile == null) {
+                matsimScenario.setPopulation(population);
+            }
+            logger.warn("Stage " + stage + " population: " + day + "|" + year + "|"
+                    + matsimScenario.getPopulation().getPersons().size());
 
             // Fill any gaps between schedule and transit-vehicles file (safe no-op when
             // transit-vehicles.xml already covers all routes).
@@ -609,19 +697,66 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
                 }
             });
             controler.run();
-            logger.warn("Running MATSim transport model for " + day + " all-modes scenario " + year + " finished.");
+            logger.warn("MATSim stage " + stage + " for " + day + " " + year + " finished.");
 
-            // Get travel Times from MATSim - weekday
-            if(day.equals(Day.thursday)){
-                logger.warn("Using MATSim to compute travel times from zone to zone.");
-                TravelTime travelTime = controler.getLinkTravelTimes();
-                TravelDisutility travelDisutility = controler.getTravelDisutilityFactory().createTravelDisutility(travelTime);
-                updateTravelTimes(travelTime, travelDisutility);
+            return controler;
+    }
+
+    /**
+     * The single output directory shared by both all-modes stages — unchanged from the
+     * one-stage version, so ITERS/it.0 ... ITERS/it.200 all live side by side.
+     */
+    private String allModesOutputDirectory(int year, Day day) {
+        final String outputDirectoryRoot = properties.main.baseDirectory + "scenOutput/" + properties.main.scenarioName;
+        return outputDirectoryRoot + "/matsim/" + year + "/" + day + "/allModes/";
+    }
+
+    /**
+     * Plans that stage 2 warm-starts from: stage 1's own dump of its final iteration, written
+     * by MATSim as {@code ITERS/it.<n>/<runId>.<n>.plans.xml.gz}. Deliberately not a copy under
+     * an invented name — stage 2 begins at iteration {@value #FIRST_ITERATION_DISRUPTED} and so
+     * can never overwrite this file, which makes its presence an unambiguous marker that a base
+     * run finished here. The top-level {@code <runId>.output_plans.xml.gz} could not serve
+     * either purpose: both stages write it, so after a disrupted run it holds iteration
+     * {@value #LAST_ITERATION_DISRUPTED}, indistinguishable from a base one.
+     */
+    private String basePlansFile(String outputDirectory, int year) {
+        return outputDirectory + "ITERS/it." + LAST_ITERATION_BASE + "/"
+                + year + "." + LAST_ITERATION_BASE + ".plans.xml.gz";
+    }
+
+    /**
+     * Copies the stage-1 statistics to {@code <runId>.base_<name>} so stage 2, which writes its
+     * own into the same directory, cannot clobber them. Runs whether stage 1 was just executed
+     * or reused, and never overwrites an existing copy — after a stage-2 run the originals hold
+     * iterations {@value #FIRST_ITERATION_DISRUPTED}-{@value #LAST_ITERATION_DISRUPTED}, and
+     * re-copying them would destroy the preserved base history.
+     * <p>
+     * The per-iteration ITERS/ folders need no protection: stage 2 starts at iteration
+     * {@value #FIRST_ITERATION_DISRUPTED} and so never writes into a stage-1 iteration folder.
+     */
+    private void preserveBaseOutputs(String outputDirectory, int year) {
+        for (String name : BASE_OUTPUTS_TO_PRESERVE) {
+            Path source = Path.of(outputDirectory + year + "." + name);
+            if (!Files.exists(source)) {
+                logger.warn("Base output " + source + " not found — not preserved.");
+                continue;
+            }
+            Path target = Path.of(outputDirectory + year + ".base_" + name);
+            if (Files.exists(target)) {
+                logger.info("Base output " + target.getFileName() + " already preserved — keeping it.");
+                continue;
+            }
+            try {
+                Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+                logger.info("Preserved base output " + source.getFileName() + " as " + target.getFileName() + ".");
+            } catch (IOException e) {
+                throw new RuntimeException("Could not preserve base output " + source + " as " + target, e);
             }
         }
     }
 
-    private void fillAllModesConfig(Config config, int year, Day day) {
+    private void fillAllModesConfig(Config config, int year, Day day, int stage) {
         // Set basic setting
         config.qsim().setEndTime(24*60*60);
         config.global().setNumberOfThreads(16);
@@ -650,18 +785,38 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         logger.info("Flow Cap Factor for all modes: " + config.qsim().getFlowCapFactor());
         logger.info("Storage Cap Factor for all modes: " + config.qsim().getStorageCapFactor());
 
-        // Set output directory
-        final String outputDirectoryRoot = properties.main.baseDirectory + "scenOutput/" + properties.main.scenarioName;
-        String outputDirectory = outputDirectoryRoot + "/matsim/" + year + "/" + day + "/allModes/";
+        // Set output directory. Both stages share it, so only stage 1 may clear it; stage 2
+        // writes its iterations into the same ITERS/ alongside the base ones.
         config.controller().setRunId(String.valueOf(year));
-        config.controller().setOutputDirectory(outputDirectory);
-        config.controller().setOverwriteFileSetting(OutputDirectoryHierarchy.OverwriteFileSetting.deleteDirectoryIfExists);
+        config.controller().setOutputDirectory(allModesOutputDirectory(year, day));
 
         // Iterations: the motorized side needs ~100 iterations to equilibrate congestion and
         // mode shares; bike/walk converge immediately and ride along at negligible cost.
-        // Innovation is switched off for the last 20% so final mode shares come from stable
-        // selection rather than ongoing experimentation.
-        config.controller().setLastIteration(100);
+        // Innovation is switched off for the last 20% of EACH stage (MATSim computes the
+        // cut-off as firstIteration + fraction * (lastIteration - firstIteration)), so stage 1
+        // settles by iteration 80 and stage 2 by iteration 180 — ~80 iterations to adapt to the
+        // disruption, then 20 of stable selection.
+        if (stage == STAGE_BASE) {
+            config.controller().setOverwriteFileSetting(OutputDirectoryHierarchy.OverwriteFileSetting.deleteDirectoryIfExists);
+            config.controller().setFirstIteration(FIRST_ITERATION_BASE);
+            config.controller().setLastIteration(LAST_ITERATION_BASE);
+        } else {
+            config.controller().setOverwriteFileSetting(OutputDirectoryHierarchy.OverwriteFileSetting.overwriteExistingFiles);
+            config.controller().setFirstIteration(FIRST_ITERATION_DISRUPTED);
+            config.controller().setLastIteration(LAST_ITERATION_DISRUPTED);
+
+            // Network change events. The time-variant network must be requested BEFORE
+            // ScenarioUtils.loadScenario, otherwise plain LinkImpls are built and the change
+            // events have no effect at all.
+            String changeEventsFile = properties.main.baseDirectory + properties.healthData.networkChangeEvents_file;
+            if (!new File(changeEventsFile).exists()) {
+                throw new RuntimeException("Network change events file not found: " + changeEventsFile
+                        + " (set 'network.change.events.file' in the properties file).");
+            }
+            config.network().setTimeVariantNetwork(true);
+            config.network().setChangeEventsInputFile(changeEventsFile);
+            logger.warn("Stage " + stage + ": network change events ACTIVE from " + changeEventsFile);
+        }
         config.replanning().setFractionOfIterationsToDisableInnovation(0.8);
         config.controller().setWritePlansInterval(Math.max(config.controller().getLastIteration(), 1));
         config.controller().setWriteEventsInterval(Math.max(config.controller().getLastIteration(), 1));
