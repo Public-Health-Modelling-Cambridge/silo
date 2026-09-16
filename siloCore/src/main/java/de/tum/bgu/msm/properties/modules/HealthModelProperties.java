@@ -16,6 +16,7 @@ public class HealthModelProperties {
     public final String transitVehicles_file;
     public final String multimodalNetwork_file;
     public final String networkChangeEvents_file;
+    public final String floodDepthTimeSeries_file;
 
     public final double matsim_scale_factor_car;
     public final double matsim_scale_factor_bikePed;
@@ -68,6 +69,10 @@ public class HealthModelProperties {
         // Applied in the second stage of the all-modes MATSim run only (iterations 100-200),
         // so that agents first reach equilibrium on the undisrupted network.
         networkChangeEvents_file = PropertiesUtil.getStringProperty(bundle, "network.change.events.file", "input/mito/trafficAssignment/flood_networkChangeEvents.xml");
+
+        // Per-link flood depth time series, written by section 14 of flood_road_exposure.ipynb.
+        // Drives the walk/bike flood response; the change events above drive the motorised one.
+        floodDepthTimeSeries_file = PropertiesUtil.getStringProperty(bundle, "flood.depth.timeseries.file", "input/mito/trafficAssignment/flood_link_depth_timeseries.csv.gz");
 
         matsim_scale_factor_car = PropertiesUtil.getDoubleProperty(bundle, "matsim.scale.factor.car", 0.1);
 

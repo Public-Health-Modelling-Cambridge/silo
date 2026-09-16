@@ -26,6 +26,8 @@ import de.tum.bgu.msm.data.Purpose;
 import de.tum.bgu.msm.data.travelTimes.SkimTravelTimes;
 import de.tum.bgu.msm.data.travelTimes.TravelTimes;
 import de.tum.bgu.msm.health.data.DataContainerHealth;
+import de.tum.bgu.msm.health.flood.FloodActiveModesModule;
+import de.tum.bgu.msm.health.flood.WaterDepthData;
 import de.tum.bgu.msm.matsim.MatsimData;
 import de.tum.bgu.msm.matsim.MatsimScenarioAssembler;
 import de.tum.bgu.msm.matsim.MatsimTravelTimesAndCosts;
@@ -118,6 +120,12 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
     // 116 so the production code path is exercised. Mode shares will have started moving but not
     // settled.
     private static final int LAST_ITERATION_DISRUPTED = 120;
+
+    // Extra avoidance of flooded links by walk and bike, beyond their slowness: the routing
+    // cost is multiplied by (1 + weight * depthFraction). 0 lets the flood act through travel
+    // time alone — the conservative setting until the term is calibrated against evidence on
+    // how far pedestrians actually detour around standing water.
+    private static final double FLOOD_HAZARD_WEIGHT = 0.;
 
     // Stage 2 writes its own <runId>.scorestats.csv / modestats.csv into the shared output
     // directory, so stage 1's are copied aside as "<runId>.base_*" to keep the 0-100 history.
@@ -696,6 +704,20 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
                     addRoutingModuleBinding(TransportMode.walk).toProvider(new NetworkRoutingProvider(TransportMode.walk));
                 }
             });
+
+            // Flood response for the active modes. Cars, trucks and road-running buses get the
+            // flood natively, through the freespeed NetworkChangeEvents set up in
+            // fillAllModesConfig. Walk and bike cannot: they are teleported and their speed
+            // comes from mito's config-group calculators, which never consult the network. This
+            // module rebinds their TravelTime and TravelDisutility to read the same hazard
+            // field, so both sides respond to one flood. Stage 1 stays undisrupted.
+            if (stage == STAGE_DISRUPTED) {
+                WaterDepthData depthData = WaterDepthData.read(
+                        properties.main.baseDirectory + properties.healthData.floodDepthTimeSeries_file,
+                        matsimScenario.getNetwork());
+                controler.addOverridingModule(new FloodActiveModesModule(depthData, FLOOD_HAZARD_WEIGHT));
+            }
+
             controler.run();
             logger.warn("MATSim stage " + stage + " for " + day + " " + year + " finished.");
 
