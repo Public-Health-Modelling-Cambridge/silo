@@ -46,8 +46,8 @@
 			</snapshots>
 		</repository>
 		<repository>
-			<id>mito</id>
-			<url>https://dl.cloudsmith.io/public/msmobility/mito/maven/</url>
+			<id>phm-phm-mito</id>
+			<url>https://dl.cloudsmith.io/public/phm/phm-mito/maven/</url>
 			<releases>
 				<enabled>true</enabled>
 				<updatePolicy>always</updatePolicy>
