@@ -3,6 +3,7 @@ package de.tum.bgu.msm.health;
 import de.tum.bgu.msm.container.DataContainer;
 import de.tum.bgu.msm.data.DataSet;
 import de.tum.bgu.msm.data.Day;
+import de.tum.bgu.msm.data.MitoPerson;
 import de.tum.bgu.msm.data.travelTimes.SkimTravelTimes;
 import de.tum.bgu.msm.data.travelTimes.TravelTimes;
 import de.tum.bgu.msm.matsim.MatsimScenarioAssembler;
@@ -20,6 +21,7 @@ import org.matsim.api.core.v01.population.Population;
 import org.matsim.core.config.Config;
 import org.matsim.core.config.ConfigUtils;
 import org.matsim.core.config.groups.*;
+import org.matsim.core.population.PersonUtils;
 import org.matsim.core.population.PopulationUtils;
 import org.matsim.core.scenario.MutableScenario;
 import org.matsim.core.scenario.ScenarioUtils;
@@ -81,6 +83,11 @@ public class MitoMatsimScenarioAssemblerMCR implements MatsimScenarioAssembler {
             if (populationByDay.get(day) == null) {
                 populationByDay.put(day, PopulationUtils.createPopulation(ConfigUtils.createConfig()));
             }
+            // Each MATSim agent is one MITO trip (agent id = trip id). Car is available if the
+            // trip maker holds a licence and the household owns at least one car.
+            MitoPerson mitoPerson = dataSet.getTrips().get(Integer.parseInt(person.getId().toString())).getPerson();
+            boolean carAvailable = mitoPerson.hasDriversLicense() && mitoPerson.getHousehold().getAutos() > 0;
+            PersonUtils.setCarAvail(person, carAvailable ? "always" : "never"); // must be exactly "never" to exclude car
             populationByDay.get(day).addPerson(person);
         }
 

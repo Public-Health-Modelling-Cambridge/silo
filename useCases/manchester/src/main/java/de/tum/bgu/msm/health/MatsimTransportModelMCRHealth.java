@@ -1022,13 +1022,13 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         // Mode choice (persons only): SubtourModeChoice swaps the mode of whole home-based
         // subtours among the four competing modes. car and bike are chain-based (must return to
         // where they were left) so an agent cannot abandon a vehicle mid-chain. Car availability
-        // is not yet restricted per person — enable considerCarAvailability once a "carAvail"
-        // person attribute is present, otherwise every agent may choose car.
+        // is restricted per agent via the "carAvail" person attribute set in
+        // MitoMatsimScenarioAssemblerMCR (licence and household car ownership).
         config.subtourModeChoice().setModes(new String[]{
                 TransportMode.car, TransportMode.pt, TransportMode.walk, TransportMode.bike});
         config.subtourModeChoice().setChainBasedModes(new String[]{
                 TransportMode.car, TransportMode.bike});
-        config.subtourModeChoice().setConsiderCarAvailability(false);
+        config.subtourModeChoice().setConsiderCarAvailability(true);
 
         // Persons: mode choice + route + time.
         {
