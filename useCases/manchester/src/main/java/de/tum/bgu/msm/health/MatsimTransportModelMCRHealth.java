@@ -99,6 +99,9 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
     private static final String SUBPOP_PERSON = "person";
     private static final String SUBPOP_FREIGHT = "freight";
 
+    // Car passenger, as exported by MITO (Mode.getMatsimMode(autoPassenger)) — must match exactly.
+    private static final String CAR_PASSENGER = "car_passenger";
+
     // The all-modes run is split into two sequential Controler stages that write into ONE
     // output directory (.../allModes/), so ITERS/it.0 ... ITERS/it.200 form a single
     // continuous series and the iteration number alone says which regime an iteration
@@ -112,14 +115,15 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
     private static final int STAGE_BASE = 1;
     private static final int STAGE_DISRUPTED = 2;
     private static final int FIRST_ITERATION_BASE = 0;
-    private static final int LAST_ITERATION_BASE = 100;
-    private static final int FIRST_ITERATION_DISRUPTED = LAST_ITERATION_BASE + 1;
-    // TODO testing only — restore to 200 (100 disrupted iterations) before any production run.
-    // 120 gives 20 disrupted iterations: iteration 101 is the pure shock (flooded network, base
-    // plans unchanged), rerouting relieves most of it within ~15, and innovation switches off at
-    // 116 so the production code path is exercised. Mode shares will have started moving but not
-    // settled.
-    private static final int LAST_ITERATION_DISRUPTED = 120;
+    // Iteration counts come from the properties 'matsim.iterations.base' and
+    // 'matsim.iterations.disrupted' (100 each by default, which gives the 0..100 / 101..200
+    // split described above). About 20 disrupted iterations make a quick test: the first is
+    // the pure shock (flooded network, base plans unchanged), rerouting relieves most of it
+    // within ~15, and innovation switches off for the last 20%. Mode shares will have started
+    // moving but not settled.
+    private final int lastIterationBase;
+    private final int firstIterationDisrupted;
+    private final int lastIterationDisrupted;
 
     // Extra avoidance of flooded links by walk and bike, beyond their slowness: the routing
     // cost is multiplied by (1 + weight * depthFraction). 0 lets the flood act through travel
@@ -168,6 +172,9 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         this.matsimData = matsimData;
         this.scenarioAssembler = scenarioAssembler;
         this.properties = properties;
+        this.lastIterationBase = properties.healthData.iterationsBase;
+        this.firstIterationDisrupted = lastIterationBase + 1;
+        this.lastIterationDisrupted = lastIterationBase + properties.healthData.iterationsDisrupted;
         this.simulatedDays = Arrays.asList(Day.thursday); // we only test a typical weekday
         this.random = random;
     }
@@ -567,24 +574,36 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
             String outputDirectory = allModesOutputDirectory(year, day);
             String basePlansFile = basePlansFile(outputDirectory, year);
 
-            if (!new File(basePlansFile).exists()) {
-                logger.warn("Running MATSim stage 1 (iterations " + FIRST_ITERATION_BASE + "-" + LAST_ITERATION_BASE
-                        + ", undisrupted network) for " + day + " all-modes scenario " + year + ".");
-                runAllModesStage(year, day, STAGE_BASE, population, null);
+            final Controler controler;
+            if (!properties.healthData.runDisruptedStage) {
+                // Base-only mode ('matsim.run.disrupted.stage = false'), for calibrating mode
+                // shares: stage 1 is ALWAYS rerun (an
+                // existing base run in this directory is overwritten), so each change to the
+                // mode constants takes effect without deleting output by hand.
+                logger.warn("Base-only mode: running MATSim stage 1 (iterations " + FIRST_ITERATION_BASE + "-"
+                        + lastIterationBase + ", undisrupted network) for " + day + " all-modes scenario " + year
+                        + ". Stage 2 is switched off; any existing output in " + outputDirectory + " is replaced.");
+                controler = runAllModesStage(year, day, STAGE_BASE, population, null);
             } else {
-                logger.warn("Base run found (" + basePlansFile + ") — skipping iterations "
-                        + FIRST_ITERATION_BASE + "-" + LAST_ITERATION_BASE + " and warm-starting stage 2 from it.");
-            }
-            preserveBaseOutputs(outputDirectory, year);
+                if (!new File(basePlansFile).exists()) {
+                    logger.warn("Running MATSim stage 1 (iterations " + FIRST_ITERATION_BASE + "-" + lastIterationBase
+                            + ", undisrupted network) for " + day + " all-modes scenario " + year + ".");
+                    runAllModesStage(year, day, STAGE_BASE, population, null);
+                } else {
+                    logger.warn("Base run found (" + basePlansFile + ") — skipping iterations "
+                            + FIRST_ITERATION_BASE + "-" + lastIterationBase + " and warm-starting stage 2 from it.");
+                }
+                preserveBaseOutputs(outputDirectory, year);
 
-            logger.warn("Running MATSim stage 2 (iterations " + FIRST_ITERATION_DISRUPTED + "-" + LAST_ITERATION_DISRUPTED
-                    + ", network change events active) for " + day + " all-modes scenario " + year + ".");
-            final Controler controler = runAllModesStage(year, day, STAGE_DISRUPTED, null, basePlansFile);
+                logger.warn("Running MATSim stage 2 (iterations " + firstIterationDisrupted + "-" + lastIterationDisrupted
+                        + ", network change events active) for " + day + " all-modes scenario " + year + ".");
+                controler = runAllModesStage(year, day, STAGE_DISRUPTED, null, basePlansFile);
+            }
 
             logger.warn("Running MATSim transport model for " + day + " all-modes scenario " + year + " finished.");
 
-            // Get travel Times from MATSim - weekday. Taken from stage 2, i.e. the disrupted
-            // network is what feeds back into SILO's zone-to-zone travel times.
+            // Get travel Times from MATSim - weekday. Taken from the last stage that ran: the
+            // disrupted network normally, the undisrupted one in base-only mode.
             if(day.equals(Day.thursday)){
                 logger.warn("Using MATSim to compute travel times from zone to zone.");
                 TravelTime travelTime = controler.getLinkTravelTimes();
@@ -623,6 +642,17 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
             }
             logger.warn("Stage " + stage + " population: " + day + "|" + year + "|"
                     + matsimScenario.getPopulation().getPersons().size());
+
+            // Passengers may use every link a car may use, so the network router's mode-filtered
+            // network for car_passenger equals the car network.
+            for (Link link : matsimScenario.getNetwork().getLinks().values()) {
+                Set<String> allowed = link.getAllowedModes();
+                if (allowed.contains(TransportMode.car) && !allowed.contains(CAR_PASSENGER)) {
+                    Set<String> modes = new HashSet<>(allowed);
+                    modes.add(CAR_PASSENGER);
+                    link.setAllowedModes(modes);
+                }
+            }
 
             // Fill any gaps between schedule and transit-vehicles file (safe no-op when
             // transit-vehicles.xml already covers all routes).
@@ -686,6 +716,16 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
                 matsimScenario.getVehicles().addVehicleType(bicycle);
             }
 
+            // PrepareForSim needs a type for every network routing mode. The passenger rides in
+            // a driver's car that is already simulated, so the type occupies no road capacity.
+            Id<VehicleType> carPassengerTypeId = Id.create(CAR_PASSENGER, VehicleType.class);
+            if (!matsimScenario.getVehicles().getVehicleTypes().containsKey(carPassengerTypeId)) {
+                VehicleType carPassenger = fac.createVehicleType(carPassengerTypeId);
+                carPassenger.setNetworkMode(CAR_PASSENGER);
+                carPassenger.setPcuEquivalents(0.);
+                matsimScenario.getVehicles().addVehicleType(carPassenger);
+            }
+
             matsimScenario.getConfig().qsim().setVehiclesSource(QSimConfigGroup.VehiclesSource.modeVehicleTypesFromVehiclesData);
 
             //set up controler
@@ -702,6 +742,12 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
                 @Override
                 public void install() {
                     addRoutingModuleBinding(TransportMode.walk).toProvider(new NetworkRoutingProvider(TransportMode.walk));
+
+                    // Passengers ride in a driver's car: route on the car network with the congested
+                    // (and, in stage 2, flooded) car travel times and the car disutility.
+                    // networkTravelTime() is the key of the car travel time (named "car").
+                    addTravelTimeBinding(CAR_PASSENGER).to(networkTravelTime());
+                    addTravelDisutilityFactoryBinding(CAR_PASSENGER).to(carTravelDisutilityFactoryKey());
                 }
             });
 
@@ -736,26 +782,26 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
     /**
      * Plans that stage 2 warm-starts from: stage 1's own dump of its final iteration, written
      * by MATSim as {@code ITERS/it.<n>/<runId>.<n>.plans.xml.gz}. Deliberately not a copy under
-     * an invented name — stage 2 begins at iteration {@value #FIRST_ITERATION_DISRUPTED} and so
+     * an invented name — stage 2 begins one iteration later and so
      * can never overwrite this file, which makes its presence an unambiguous marker that a base
      * run finished here. The top-level {@code <runId>.output_plans.xml.gz} could not serve
-     * either purpose: both stages write it, so after a disrupted run it holds iteration
-     * {@value #LAST_ITERATION_DISRUPTED}, indistinguishable from a base one.
+     * either purpose: both stages write it, so after a disrupted run it holds the last
+     * disrupted iteration, indistinguishable from a base one.
      */
     private String basePlansFile(String outputDirectory, int year) {
-        return outputDirectory + "ITERS/it." + LAST_ITERATION_BASE + "/"
-                + year + "." + LAST_ITERATION_BASE + ".plans.xml.gz";
+        return outputDirectory + "ITERS/it." + lastIterationBase + "/"
+                + year + "." + lastIterationBase + ".plans.xml.gz";
     }
 
     /**
      * Copies the stage-1 statistics to {@code <runId>.base_<name>} so stage 2, which writes its
      * own into the same directory, cannot clobber them. Runs whether stage 1 was just executed
      * or reused, and never overwrites an existing copy — after a stage-2 run the originals hold
-     * iterations {@value #FIRST_ITERATION_DISRUPTED}-{@value #LAST_ITERATION_DISRUPTED}, and
+     * iterations the disrupted iterations, and
      * re-copying them would destroy the preserved base history.
      * <p>
-     * The per-iteration ITERS/ folders need no protection: stage 2 starts at iteration
-     * {@value #FIRST_ITERATION_DISRUPTED} and so never writes into a stage-1 iteration folder.
+     * The per-iteration ITERS/ folders need no protection: stage 2 starts after the
+     * last base iteration and so never writes into a stage-1 iteration folder.
      */
     private void preserveBaseOutputs(String outputDirectory, int year) {
         for (String name : BASE_OUTPUTS_TO_PRESERVE) {
@@ -821,11 +867,11 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         if (stage == STAGE_BASE) {
             config.controller().setOverwriteFileSetting(OutputDirectoryHierarchy.OverwriteFileSetting.deleteDirectoryIfExists);
             config.controller().setFirstIteration(FIRST_ITERATION_BASE);
-            config.controller().setLastIteration(LAST_ITERATION_BASE);
+            config.controller().setLastIteration(lastIterationBase);
         } else {
             config.controller().setOverwriteFileSetting(OutputDirectoryHierarchy.OverwriteFileSetting.overwriteExistingFiles);
-            config.controller().setFirstIteration(FIRST_ITERATION_DISRUPTED);
-            config.controller().setLastIteration(LAST_ITERATION_DISRUPTED);
+            config.controller().setFirstIteration(firstIterationDisrupted);
+            config.controller().setLastIteration(lastIterationDisrupted);
 
             // Network change events. The time-variant network must be requested BEFORE
             // ScenarioUtils.loadScenario, otherwise plain LinkImpls are built and the change
@@ -844,8 +890,9 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         config.controller().setWriteEventsInterval(Math.max(config.controller().getLastIteration(), 1));
 
         // Modes: only car/truck are QSim main modes (pt vehicles are driven by the transit
-        // engine). bike is a network routing mode WITHOUT being a main mode — the QSim
-        // teleports it along its routed path with the routed travel time. walk must STAY a
+        // engine). bike and car_passenger are network routing modes WITHOUT being main modes —
+        // the QSim teleports them along their routed path with the routed travel time (for
+        // car_passenger that is the congested car travel time). walk must STAY a
         // teleported mode in the config: SwissRailRaptor's TransitRouterConfig hard-requires
         // teleported walk params (beeline speed for pt access/egress/transfer walks) and
         // MATSim forbids a mode being both network and teleported. Direct walk legs are
@@ -853,8 +900,10 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         // runAllModesSimulation. To move bike/walk into the QSim later (e.g. for link-level
         // exposure events), make them main modes and switch to per-person vehicles + SeepageQ.
         config.qsim().setMainModes(List.of(TransportMode.car, TransportMode.truck));
-        config.routing().setNetworkModes(List.of(TransportMode.car, TransportMode.truck, TransportMode.bike));
+        config.routing().setNetworkModes(List.of(TransportMode.car, TransportMode.truck, TransportMode.bike, CAR_PASSENGER));
         config.routing().removeModeRoutingParams(TransportMode.bike);
+        // A mode cannot be both network and teleported.
+        config.routing().removeModeRoutingParams(CAR_PASSENGER);
         config.routing().setAccessEgressType(RoutingConfigGroup.AccessEgressType.none);
 
         // --- Scoring ---
@@ -862,19 +911,19 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         // calibration knobs. TODO: calibrate constants so the baseline (no-flood) run
         // reproduces MITO's mode shares before interpreting flood-scenario mode shifts.
         ModeParams ptParams = config.scoring().getOrCreateModeParams(TransportMode.pt);
-        ptParams.setConstant(-3.13614);
+        ptParams.setConstant(properties.healthData.modeConstantPt);
         ptParams.setMarginalUtilityOfTraveling((-0.03967 + 0.19584) * 60);
         ptParams.setMarginalUtilityOfDistance(0.);
         ptParams.setMonetaryDistanceRate(-0.0001);
 
         ModeParams walkParams = config.scoring().getOrCreateModeParams(TransportMode.walk);
-        walkParams.setConstant(0.55988);
+        walkParams.setConstant(properties.healthData.modeConstantWalk);
         walkParams.setMarginalUtilityOfDistance(0.);
         walkParams.setMarginalUtilityOfTraveling((-0.14696 + 0.19584) * 60);
         walkParams.setMonetaryDistanceRate(0.);
 
         ModeParams bicycleParams = config.scoring().getOrCreateModeParams(TransportMode.bike);
-        bicycleParams.setConstant(-4.42678);
+        bicycleParams.setConstant(properties.healthData.modeConstantBike);
         bicycleParams.setMarginalUtilityOfDistance(0.0);
         bicycleParams.setMarginalUtilityOfTraveling((-0.10111 + 0.19584) * 60);
         bicycleParams.setMonetaryDistanceRate(0.);
@@ -888,11 +937,32 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         nonNetworkWalk.setMonetaryDistanceRate(walkParams.getMonetaryDistanceRate());
         config.scoring().addModeParams(nonNetworkWalk);
 
+        // Weather: shift of each mode's utility relative to car for the weather of this day, in
+        // both stages (the weather belongs to the day, the flood only to stage 2). It is a
+        // DAILY constant, charged once per agent that uses the mode — an agent is one trip
+        // (out and back), so a per-leg constant would penalise a round trip twice. A pt trip
+        // also contains walk access/egress legs and therefore picks up the walk shift; the pt
+        // shift is reduced by it so that a pt user ends up with exactly the pt value.
+        Map<String, Double> weatherShift = WeatherModeShifts.forDay(day);
+        double walkShift = weatherShift.getOrDefault(TransportMode.walk, 0.);
+        walkParams.setDailyUtilityConstant(walkShift);
+        bicycleParams.setDailyUtilityConstant(weatherShift.getOrDefault(TransportMode.bike, 0.));
+        ptParams.setDailyUtilityConstant(weatherShift.getOrDefault(TransportMode.pt, 0.) - walkShift);
+
         ModeParams carParams = config.scoring().getOrCreateModeParams(TransportMode.car);
         carParams.setConstant(0.);
         carParams.setMarginalUtilityOfTraveling(0.);
         carParams.setMarginalUtilityOfDistance(0.);
         carParams.setMonetaryDistanceRate(-0.00015);
+
+        // Car passenger: same in-vehicle time valuation as car (0 -> only the opportunity cost of
+        // time via performing), no monetary cost (the driver pays). Constant to be calibrated;
+        // the default (-1.2) is MITO's passenger-vs-driver ASC for HBS/HBR/HBO (-1.18).
+        ModeParams carPassengerParams = config.scoring().getOrCreateModeParams(CAR_PASSENGER);
+        carPassengerParams.setConstant(properties.healthData.modeConstantCarPassenger);
+        carPassengerParams.setMarginalUtilityOfTraveling(0.);
+        carPassengerParams.setMarginalUtilityOfDistance(0.);
+        carPassengerParams.setMonetaryDistanceRate(0.);
 
         ModeParams truckParams = new ModeParams(TransportMode.truck);
         truckParams.setConstant(carParams.getConstant());
@@ -1020,12 +1090,14 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         config.timeAllocationMutator().setAffectingDuration(false);
 
         // Mode choice (persons only): SubtourModeChoice swaps the mode of whole home-based
-        // subtours among the four competing modes. car and bike are chain-based (must return to
-        // where they were left) so an agent cannot abandon a vehicle mid-chain. Car availability
-        // is restricted per agent via the "carAvail" person attribute set in
-        // MitoMatsimScenarioAssemblerMCR (licence and household car ownership).
+        // subtours among the five competing modes, the same choice set as MITO. car and bike are
+        // chain-based (must return to where they were left) so an agent cannot abandon a vehicle
+        // mid-chain; car_passenger is not. Car availability is restricted per agent via the
+        // "carAvail" person attribute set in MitoMatsimScenarioAssemblerMCR (licence and
+        // household car ownership). It only restricts "car": car_passenger stays open to
+        // everyone, so people without car access can get a lift.
         config.subtourModeChoice().setModes(new String[]{
-                TransportMode.car, TransportMode.pt, TransportMode.walk, TransportMode.bike});
+                TransportMode.car, CAR_PASSENGER, TransportMode.pt, TransportMode.walk, TransportMode.bike});
         config.subtourModeChoice().setChainBasedModes(new String[]{
                 TransportMode.car, TransportMode.bike});
         config.subtourModeChoice().setConsiderCarAvailability(true);

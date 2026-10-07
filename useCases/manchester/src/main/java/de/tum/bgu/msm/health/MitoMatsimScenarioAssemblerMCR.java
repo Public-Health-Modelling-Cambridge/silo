@@ -84,9 +84,13 @@ public class MitoMatsimScenarioAssemblerMCR implements MatsimScenarioAssembler {
                 populationByDay.put(day, PopulationUtils.createPopulation(ConfigUtils.createConfig()));
             }
             // Each MATSim agent is one MITO trip (agent id = trip id). Car is available if the
-            // trip maker holds a licence and the household owns at least one car.
+            // trip maker holds a licence and the household owns at least one car. MITO's own
+            // rule is weaker (it never checks a licence), so a trip MITO already assigned to
+            // car driver keeps car available — otherwise it would hold an impossible car plan.
             MitoPerson mitoPerson = dataSet.getTrips().get(Integer.parseInt(person.getId().toString())).getPerson();
-            boolean carAvailable = mitoPerson.hasDriversLicense() && mitoPerson.getHousehold().getAutos() > 0;
+            boolean isMitoCarDriver = TransportMode.car.equals(person.getAttributes().getAttribute("mode"));
+            boolean carAvailable = isMitoCarDriver
+                    || (mitoPerson.hasDriversLicense() && mitoPerson.getHousehold().getAutos() > 0);
             PersonUtils.setCarAvail(person, carAvailable ? "always" : "never"); // must be exactly "never" to exclude car
             populationByDay.get(day).addPerson(person);
         }

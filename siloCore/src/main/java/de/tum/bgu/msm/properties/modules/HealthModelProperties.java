@@ -17,6 +17,13 @@ public class HealthModelProperties {
     public final String multimodalNetwork_file;
     public final String networkChangeEvents_file;
     public final String floodDepthTimeSeries_file;
+    public final boolean runDisruptedStage;
+    public final int iterationsBase;
+    public final int iterationsDisrupted;
+    public final double modeConstantWalk;
+    public final double modeConstantBike;
+    public final double modeConstantPt;
+    public final double modeConstantCarPassenger;
 
     public final double matsim_scale_factor_car;
     public final double matsim_scale_factor_bikePed;
@@ -73,6 +80,24 @@ public class HealthModelProperties {
         // Per-link flood depth time series, written by section 14 of flood_road_exposure.ipynb.
         // Drives the walk/bike flood response; the change events above drive the motorised one.
         floodDepthTimeSeries_file = PropertiesUtil.getStringProperty(bundle, "flood.depth.timeseries.file", "input/mito/trafficAssignment/flood_link_depth_timeseries.csv.gz");
+
+        // Stage 2 of the all-modes MATSim run (network change events). Off by default: only
+        // stage 1 runs, e.g. while calibrating mode shares, and it is rerun on every call,
+        // replacing any base run already on disk. Set to true to run the disrupted stage.
+        runDisruptedStage = PropertiesUtil.getBooleanProperty(bundle, "matsim.run.disrupted.stage", false);
+
+        // Number of MATSim iterations per stage of the all-modes run. Stage 1 runs iterations
+        // 0..base; stage 2 continues for 'disrupted' more. Use a small disrupted value (e.g. 20)
+        // for a quick test: enough for rerouting to respond, not for mode shares to settle.
+        iterationsBase = PropertiesUtil.getIntProperty(bundle, "matsim.iterations.base", 100);
+        iterationsDisrupted = PropertiesUtil.getIntProperty(bundle, "matsim.iterations.disrupted", 100);
+
+        // Mode constants of the all-modes MATSim run, per leg, relative to car (fixed at 0).
+        // These are the knobs for calibrating MATSim mode shares to MITO.
+        modeConstantWalk = PropertiesUtil.getDoubleProperty(bundle, "matsim.mode.constant.walk", 0.55988);
+        modeConstantBike = PropertiesUtil.getDoubleProperty(bundle, "matsim.mode.constant.bike", -4.42678);
+        modeConstantPt = PropertiesUtil.getDoubleProperty(bundle, "matsim.mode.constant.pt", -3.13614);
+        modeConstantCarPassenger = PropertiesUtil.getDoubleProperty(bundle, "matsim.mode.constant.car_passenger", -1.2);
 
         matsim_scale_factor_car = PropertiesUtil.getDoubleProperty(bundle, "matsim.scale.factor.car", 0.1);
 
