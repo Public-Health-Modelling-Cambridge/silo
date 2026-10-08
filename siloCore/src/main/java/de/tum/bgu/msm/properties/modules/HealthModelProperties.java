@@ -20,6 +20,7 @@ public class HealthModelProperties {
     public final boolean runDisruptedStage;
     public final int iterationsBase;
     public final int iterationsDisrupted;
+    public final String modeConstantsFile;
     public final double modeConstantWalk;
     public final double modeConstantBike;
     public final double modeConstantPt;
@@ -92,8 +93,11 @@ public class HealthModelProperties {
         iterationsBase = PropertiesUtil.getIntProperty(bundle, "matsim.iterations.base", 100);
         iterationsDisrupted = PropertiesUtil.getIntProperty(bundle, "matsim.iterations.disrupted", 100);
 
-        // Mode constants of the all-modes MATSim run, per leg, relative to car (fixed at 0).
-        // These are the knobs for calibrating MATSim mode shares to MITO.
+        // Mode constants of the all-modes MATSim run by purpose group, relative to car (fixed
+        // at 0): CSV with header group,mode,constant. These are the calibration knobs.
+        modeConstantsFile = PropertiesUtil.getStringProperty(bundle, "matsim.mode.constants.file", "mode_constants.csv");
+
+        // Superseded by the CSV above and no longer used: one pooled constant per mode.
         modeConstantWalk = PropertiesUtil.getDoubleProperty(bundle, "matsim.mode.constant.walk", 0.55988);
         modeConstantBike = PropertiesUtil.getDoubleProperty(bundle, "matsim.mode.constant.bike", -4.42678);
         modeConstantPt = PropertiesUtil.getDoubleProperty(bundle, "matsim.mode.constant.pt", -3.13614);

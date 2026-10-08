@@ -75,6 +75,7 @@ import routing.components.JctStress;
 import routing.components.LinkAmbience;
 import routing.components.LinkStress;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -93,14 +94,48 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
 
     private static final Logger logger = LogManager.getLogger(MatsimTransportModelMCRHealth.class);
 
-    // Subpopulations steer replanning: "person" agents perform mode choice (SubtourModeChoice)
-    // on top of re-routing / re-timing, so car/pt/walk/bike compete within MATSim. "freight"
-    // (trucks + through traffic) keep their fixed mode and may only re-route / re-time.
+    // Subpopulations steer replanning and scoring. Person agents perform mode choice
+    // (SubtourModeChoice) on top of re-routing / re-timing, so the modes compete within MATSim;
+    // there is one person subpopulation per purpose group ("person_HBW", ...) because the mode
+    // constants differ by group. "freight" (trucks + through traffic) keep their fixed mode and
+    // may only re-route / re-time.
     private static final String SUBPOP_PERSON = "person";
     private static final String SUBPOP_FREIGHT = "freight";
 
+    // Purpose groups of the mode-choice model. HBD = home-based discretionary (HBS, HBR, HBO).
+    private static final List<String> PURPOSE_GROUPS = List.of("HBW", "HBE", "HBD", "HBA", "NHB");
+    private static final String DEFAULT_PURPOSE_GROUP = "HBD";
+    private static final List<String> PERSON_SUBPOPS = PURPOSE_GROUPS.stream()
+            .map(group -> SUBPOP_PERSON + "_" + group).toList();
+
     // Car passenger, as exported by MITO (Mode.getMatsimMode(autoPassenger)) — must match exactly.
     private static final String CAR_PASSENGER = "car_passenger";
+    private static final String NON_NETWORK_WALK = "non_network_walk";
+
+    // --- Mode-choice parameters: MNL5_purposeASC, a 5-alternative multinomial logit (car
+    // driver, car passenger, pt, walk, bike) with purpose-group constants, estimated with Apollo
+    // on the TRADS survey (dare/modeChoice, mnl_modeChoice_5modes_apollo.R). MATSim's utility
+    // is meant to equal the estimated one: the time and cost rates below stay as estimated and
+    // only the constants (mode_constants.csv) are calibrated.
+    // Caveat: the implied car value of time is high (about GBP 30/h against TAG's 5-12),
+    // because the car cost (GBP 0.15/km) is collinear with car time. Keep a TAG-anchored
+    // sensitivity run.
+    private static final double PERFORMING = 11.019498;         // utils/h = -b_tt_driver * 60 (opportunity cost of time)
+    private static final double MARG_UTIL_MONEY = 0.3665;       // = -b_cost, per GBP
+    // marginalUtilityOfTraveling (utils/h) = (b_tt_mode - b_tt_driver) * 60
+    private static final double TRAV_CAR = 0.;
+    private static final double TRAV_CAR_PASSENGER = -3.446105;
+    private static final double TRAV_PT = 8.794573;
+    private static final double TRAV_WALK = 2.542577;
+    private static final double TRAV_BIKE = 4.407420;
+    // Waiting is not in the estimation data, so it is valued as pt time. In MATSim waitingPt
+    // replaces the pt travel rate during the wait, on top of the opportunity cost; 0 would
+    // value waiting as car time.
+    private static final double WAITING_PT = TRAV_PT;
+    private static final double PT_FARE_PER_BOARDING = -0.3665; // utils = b_cost * GBP 1
+    private static final double MONETARY_RATE_CAR = -0.00015;   // GBP/m
+    private static final double MONETARY_RATE_PT = -0.0001;     // GBP/m; car passenger, walk, bike pay nothing
+    private static final double LATE_ARRIVAL = -3 * PERFORMING;
 
     // The all-modes run is split into two sequential Controler stages that write into ONE
     // output directory (.../allModes/), so ITERS/it.0 ... ITERS/it.200 form a single
@@ -149,6 +184,10 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
     private MatsimScenarioAssembler scenarioAssembler;
 
     private List<Day> simulatedDays;
+
+    // Mode constants by purpose group and mode, read once from mode_constants.csv.
+    private Map<String, Map<String, Double>> modeConstants;
+    private final Set<String> unmappedPurposes = new HashSet<>();
 
     protected final Random random;
 
@@ -560,7 +599,7 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
             // Add ALL MITO persons — no mode filter. Each agent STARTS from its MITO-chosen mode
             // (car/pt/bike/walk); SubtourModeChoice replanning then lets them switch modes.
             for (Person pp : assembledScenario.getPopulation().getPersons().values()) {
-                PopulationUtils.putSubpopulation(pp, SUBPOP_PERSON);
+                PopulationUtils.putSubpopulation(pp, SUBPOP_PERSON + "_" + purposeGroup(pp));
                 population.addPerson(pp);
             }
 
@@ -748,6 +787,10 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
                     // networkTravelTime() is the key of the car travel time (named "car").
                     addTravelTimeBinding(CAR_PASSENGER).to(networkTravelTime());
                     addTravelDisutilityFactoryBinding(CAR_PASSENGER).to(carTravelDisutilityFactoryKey());
+
+                    // Default scoring plus a correction that scores the walk legs of pt trips at
+                    // the pt time rate, as in the estimation.
+                    bindScoringFunctionFactory().to(PtTripScoringFunctionFactory.class);
                 }
             });
 
@@ -907,92 +950,19 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         config.routing().setAccessEgressType(RoutingConfigGroup.AccessEgressType.none);
 
         // --- Scoring ---
-        // All modes are scored in ONE utility scale; the mode constants below are the
-        // calibration knobs. TODO: calibrate constants so the baseline (no-flood) run
-        // reproduces MITO's mode shares before interpreting flood-scenario mode shifts.
-        ModeParams ptParams = config.scoring().getOrCreateModeParams(TransportMode.pt);
-        ptParams.setConstant(properties.healthData.modeConstantPt);
-        ptParams.setMarginalUtilityOfTraveling((-0.03967 + 0.19584) * 60);
-        ptParams.setMarginalUtilityOfDistance(0.);
-        ptParams.setMonetaryDistanceRate(-0.0001);
-
-        ModeParams walkParams = config.scoring().getOrCreateModeParams(TransportMode.walk);
-        walkParams.setConstant(properties.healthData.modeConstantWalk);
-        walkParams.setMarginalUtilityOfDistance(0.);
-        walkParams.setMarginalUtilityOfTraveling((-0.14696 + 0.19584) * 60);
-        walkParams.setMonetaryDistanceRate(0.);
-
-        ModeParams bicycleParams = config.scoring().getOrCreateModeParams(TransportMode.bike);
-        bicycleParams.setConstant(properties.healthData.modeConstantBike);
-        bicycleParams.setMarginalUtilityOfDistance(0.0);
-        bicycleParams.setMarginalUtilityOfTraveling((-0.10111 + 0.19584) * 60);
-        bicycleParams.setMonetaryDistanceRate(0.);
-
-        // Raptor's transfer walks at the same stop area emit "non_network_walk"; without
-        // its own ModeParams the scoring lookup NPEs. Mirror walk params.
-        ModeParams nonNetworkWalk = new ModeParams("non_network_walk");
-        nonNetworkWalk.setConstant(walkParams.getConstant());
-        nonNetworkWalk.setMarginalUtilityOfTraveling(walkParams.getMarginalUtilityOfTraveling());
-        nonNetworkWalk.setMarginalUtilityOfDistance(walkParams.getMarginalUtilityOfDistance());
-        nonNetworkWalk.setMonetaryDistanceRate(walkParams.getMonetaryDistanceRate());
-        config.scoring().addModeParams(nonNetworkWalk);
-
-        // Weather: shift of each mode's utility relative to car for the weather of this day, in
-        // both stages (the weather belongs to the day, the flood only to stage 2). It is a
-        // DAILY constant, charged once per agent that uses the mode — an agent is one trip
-        // (out and back), so a per-leg constant would penalise a round trip twice. A pt trip
-        // also contains walk access/egress legs and therefore picks up the walk shift; the pt
-        // shift is reduced by it so that a pt user ends up with exactly the pt value.
+        // All modes are scored in ONE utility scale, the estimated MNL5_purposeASC model (see
+        // the constants at the top of the class). One parameter set per person purpose group,
+        // differing only in the mode constants, which are the calibration knobs
+        // (mode_constants.csv). The default set serves freight (fixed mode, so its constants
+        // are irrelevant) and SwissRailRaptor's routing, which reads the default set and
+        // therefore needs the same time and waiting rates.
+        Map<String, Map<String, Double>> constantsByGroup = getModeConstants();
         Map<String, Double> weatherShift = WeatherModeShifts.forDay(day);
-        double walkShift = weatherShift.getOrDefault(TransportMode.walk, 0.);
-        walkParams.setDailyUtilityConstant(walkShift);
-        bicycleParams.setDailyUtilityConstant(weatherShift.getOrDefault(TransportMode.bike, 0.));
-        ptParams.setDailyUtilityConstant(weatherShift.getOrDefault(TransportMode.pt, 0.) - walkShift);
-
-        ModeParams carParams = config.scoring().getOrCreateModeParams(TransportMode.car);
-        carParams.setConstant(0.);
-        carParams.setMarginalUtilityOfTraveling(0.);
-        carParams.setMarginalUtilityOfDistance(0.);
-        carParams.setMonetaryDistanceRate(-0.00015);
-
-        // Car passenger: same in-vehicle time valuation as car (0 -> only the opportunity cost of
-        // time via performing), no monetary cost (the driver pays). Constant to be calibrated;
-        // the default (-1.2) is MITO's passenger-vs-driver ASC for HBS/HBR/HBO (-1.18).
-        ModeParams carPassengerParams = config.scoring().getOrCreateModeParams(CAR_PASSENGER);
-        carPassengerParams.setConstant(properties.healthData.modeConstantCarPassenger);
-        carPassengerParams.setMarginalUtilityOfTraveling(0.);
-        carPassengerParams.setMarginalUtilityOfDistance(0.);
-        carPassengerParams.setMonetaryDistanceRate(0.);
-
-        ModeParams truckParams = new ModeParams(TransportMode.truck);
-        truckParams.setConstant(carParams.getConstant());
-        truckParams.setDailyMonetaryConstant(carParams.getDailyMonetaryConstant());
-        truckParams.setMarginalUtilityOfDistance(carParams.getMarginalUtilityOfDistance());
-        truckParams.setDailyUtilityConstant(carParams.getDailyUtilityConstant());
-        truckParams.setMonetaryDistanceRate(carParams.getMonetaryDistanceRate());
-        config.scoring().addModeParams(truckParams);
-
-        double betaTravelCar = 0.19584 * 60;
-
-        config.scoring().setPerforming_utils_hr(0.19584 * 60);
-        config.scoring().setMarginalUtilityOfMoney(0.31718);
-        config.scoring().setMarginalUtlOfWaitingPt_utils_hr(-2 * betaTravelCar);
-        config.scoring().setLateArrival_utils_hr(-3 * betaTravelCar);
-
-        // Activity params (guarded — the base config file may already define them)
-        Map<String, Double> typicalDurations = Map.of(
-                "home", 12. * 60 * 60,
-                "work", 8. * 60 * 60,
-                "education", 8. * 60 * 60,
-                "shopping", 1. * 60 * 60,
-                "recreation", 1. * 60 * 60,
-                "other", 1. * 60 * 60,
-                "airport", 1. * 60 * 60);
-        for (Map.Entry<String, Double> e : typicalDurations.entrySet()) {
-            if (config.scoring().getActivityParams(e.getKey()) == null) {
-                config.scoring().addActivityParams(
-                        new ScoringConfigGroup.ActivityParams(e.getKey()).setTypicalDuration(e.getValue()));
-            }
+        fillScoringSet(config.scoring().getOrCreateScoringParameters(null),
+                constantsByGroup.get(DEFAULT_PURPOSE_GROUP), weatherShift);
+        for (String group : PURPOSE_GROUPS) {
+            fillScoringSet(config.scoring().getOrCreateScoringParameters(SUBPOP_PERSON + "_" + group),
+                    constantsByGroup.get(group), weatherShift);
         }
 
         // --- JIBE bike/walk routing inputs (as in fillBikePedConfig) ---
@@ -1102,36 +1072,24 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
                 TransportMode.car, TransportMode.bike});
         config.subtourModeChoice().setConsiderCarAvailability(true);
 
-        // Persons: mode choice + route + time.
-        {
-            ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
-            strategySettings.setStrategyName("ChangeExpBeta");
-            strategySettings.setWeight(0.7);
-            strategySettings.setSubpopulation(SUBPOP_PERSON);
-            config.replanning().addStrategySettings(strategySettings);
-        }
-        {
-            // Proportion of persons attempting a mode switch each iteration (0.15 is the
-            // conventional starting value). Lower it once mode shares are calibrated.
-            ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
-            strategySettings.setStrategyName("SubtourModeChoice");
-            strategySettings.setWeight(0.15);
-            strategySettings.setSubpopulation(SUBPOP_PERSON);
-            config.replanning().addStrategySettings(strategySettings);
-        }
-        {
-            ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
-            strategySettings.setStrategyName("ReRoute");
-            strategySettings.setWeight(0.15);
-            strategySettings.setSubpopulation(SUBPOP_PERSON);
-            config.replanning().addStrategySettings(strategySettings);
-        }
-        {
-            ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
-            strategySettings.setStrategyName("TimeAllocationMutator");
-            strategySettings.setWeight(0.15);
-            strategySettings.setSubpopulation(SUBPOP_PERSON);
-            config.replanning().addStrategySettings(strategySettings);
+        // Persons: mode choice + route + time, identical for every purpose group. The
+        // SubtourModeChoice weight is the proportion of persons attempting a mode switch each
+        // iteration (0.15 is the conventional starting value); lower it once mode shares are
+        // calibrated. Note: non-home-based trips are open plans, which SubtourModeChoice cannot
+        // change, so they keep their MITO mode and the NHB constants matter only for completeness.
+        Map<String, Double> personStrategies = new LinkedHashMap<>();
+        personStrategies.put("ChangeExpBeta", 0.7);
+        personStrategies.put("SubtourModeChoice", 0.15);
+        personStrategies.put("ReRoute", 0.15);
+        personStrategies.put("TimeAllocationMutator", 0.15);
+        for (String subpopulation : PERSON_SUBPOPS) {
+            for (Map.Entry<String, Double> strategy : personStrategies.entrySet()) {
+                ReplanningConfigGroup.StrategySettings strategySettings = new ReplanningConfigGroup.StrategySettings();
+                strategySettings.setStrategyName(strategy.getKey());
+                strategySettings.setWeight(strategy.getValue());
+                strategySettings.setSubpopulation(subpopulation);
+                config.replanning().addStrategySettings(strategySettings);
+            }
         }
 
         // Freight: fixed mode, route + time only
@@ -1155,6 +1113,185 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
             strategySettings.setWeight(0.15);
             strategySettings.setSubpopulation(SUBPOP_FREIGHT);
             config.replanning().addStrategySettings(strategySettings);
+        }
+    }
+
+    /**
+     * Fills one scoring parameter set with the estimated mode-choice model: common time, cost
+     * and waiting rates, the given mode constants, and the weather shift of the day.
+     *
+     * @param constants    constant by mode (car_passenger, pt, walk, bike) for one purpose group;
+     *                     car is the reference and fixed at 0
+     * @param weatherShift utility shift by mode for the weather of the day (may be empty)
+     */
+    private static void fillScoringSet(ScoringConfigGroup.ScoringParameterSet set, Map<String, Double> constants,
+                                       Map<String, Double> weatherShift) {
+        set.setPerforming_utils_hr(PERFORMING);
+        set.setMarginalUtilityOfMoney(MARG_UTIL_MONEY);
+        set.setMarginalUtlOfWaitingPt_utils_hr(WAITING_PT);
+        set.setLateArrival_utils_hr(LATE_ARRIVAL);
+        // Each transfer is another boarding and pays the fare again; the first boarding's fare is
+        // in the pt constant below.
+        set.setUtilityOfLineSwitch(PT_FARE_PER_BOARDING);
+
+        ModeParams carParams = set.getOrCreateModeParams(TransportMode.car);
+        carParams.setConstant(0.);
+        carParams.setMarginalUtilityOfTraveling(TRAV_CAR);
+        carParams.setMarginalUtilityOfDistance(0.);
+        carParams.setMonetaryDistanceRate(MONETARY_RATE_CAR);
+
+        // Car passenger: its own, stronger time effect than the driver's (as estimated) and no
+        // monetary cost (the driver pays).
+        ModeParams carPassengerParams = set.getOrCreateModeParams(CAR_PASSENGER);
+        carPassengerParams.setConstant(constants.get(CAR_PASSENGER));
+        carPassengerParams.setMarginalUtilityOfTraveling(TRAV_CAR_PASSENGER);
+        carPassengerParams.setMarginalUtilityOfDistance(0.);
+        carPassengerParams.setMonetaryDistanceRate(0.);
+
+        // The fare of the first boarding is a cost, not calibration, so it is added here and
+        // kept out of the CSV: calibration edits only the CSV value.
+        ModeParams ptParams = set.getOrCreateModeParams(TransportMode.pt);
+        ptParams.setConstant(constants.get(TransportMode.pt) + PT_FARE_PER_BOARDING);
+        ptParams.setMarginalUtilityOfTraveling(TRAV_PT);
+        ptParams.setMarginalUtilityOfDistance(0.);
+        ptParams.setMonetaryDistanceRate(MONETARY_RATE_PT);
+
+        ModeParams walkParams = set.getOrCreateModeParams(TransportMode.walk);
+        walkParams.setConstant(constants.get(TransportMode.walk));
+        walkParams.setMarginalUtilityOfTraveling(TRAV_WALK);
+        walkParams.setMarginalUtilityOfDistance(0.);
+        walkParams.setMonetaryDistanceRate(0.);
+
+        ModeParams bicycleParams = set.getOrCreateModeParams(TransportMode.bike);
+        bicycleParams.setConstant(constants.get(TransportMode.bike));
+        bicycleParams.setMarginalUtilityOfTraveling(TRAV_BIKE);
+        bicycleParams.setMarginalUtilityOfDistance(0.);
+        bicycleParams.setMonetaryDistanceRate(0.);
+
+        // Raptor's transfer walks at the same stop area emit "non_network_walk"; it mirrors walk.
+        // Inside a pt trip both are re-scored at the pt rate by PtTripWalkScoring.
+        ModeParams nonNetworkWalk = set.getOrCreateModeParams(NON_NETWORK_WALK);
+        nonNetworkWalk.setConstant(walkParams.getConstant());
+        nonNetworkWalk.setMarginalUtilityOfTraveling(walkParams.getMarginalUtilityOfTraveling());
+        nonNetworkWalk.setMarginalUtilityOfDistance(walkParams.getMarginalUtilityOfDistance());
+        nonNetworkWalk.setMonetaryDistanceRate(walkParams.getMonetaryDistanceRate());
+
+        // Weather: shift of each mode's utility relative to car for the weather of this day, in
+        // both stages (the weather belongs to the day, the flood only to stage 2). It is a
+        // DAILY constant, charged once per agent that uses the mode — an agent is one trip
+        // (out and back), so a per-leg constant would penalise a round trip twice. A pt trip
+        // also contains walk access/egress legs and therefore picks up the walk shift; the pt
+        // shift is reduced by it so that a pt user ends up with exactly the pt value.
+        double walkShift = weatherShift.getOrDefault(TransportMode.walk, 0.);
+        walkParams.setDailyUtilityConstant(walkShift);
+        bicycleParams.setDailyUtilityConstant(weatherShift.getOrDefault(TransportMode.bike, 0.));
+        ptParams.setDailyUtilityConstant(weatherShift.getOrDefault(TransportMode.pt, 0.) - walkShift);
+
+        ModeParams truckParams = set.getOrCreateModeParams(TransportMode.truck);
+        truckParams.setConstant(carParams.getConstant());
+        truckParams.setDailyMonetaryConstant(carParams.getDailyMonetaryConstant());
+        truckParams.setMarginalUtilityOfDistance(carParams.getMarginalUtilityOfDistance());
+        truckParams.setDailyUtilityConstant(carParams.getDailyUtilityConstant());
+        truckParams.setMonetaryDistanceRate(carParams.getMonetaryDistanceRate());
+
+        // Activity params (guarded — the base config file may already define them)
+        Map<String, Double> typicalDurations = Map.of(
+                "home", 12. * 60 * 60,
+                "work", 8. * 60 * 60,
+                "education", 8. * 60 * 60,
+                "shopping", 1. * 60 * 60,
+                "recreation", 1. * 60 * 60,
+                "other", 1. * 60 * 60,
+                "airport", 1. * 60 * 60);
+        for (Map.Entry<String, Double> e : typicalDurations.entrySet()) {
+            if (set.getActivityParams(e.getKey()) == null) {
+                set.addActivityParams(
+                        new ScoringConfigGroup.ActivityParams(e.getKey()).setTypicalDuration(e.getValue()));
+            }
+        }
+        // Stage activities ("pt interaction", ...) are not scored. A per-subpopulation set may
+        // not inherit them from the default set, so each set gets its own.
+        for (String mode : List.of(TransportMode.car, CAR_PASSENGER, TransportMode.pt, TransportMode.walk,
+                TransportMode.bike, TransportMode.truck, NON_NETWORK_WALK)) {
+            String stageActivity = ScoringConfigGroup.createStageActivityType(mode);
+            if (set.getActivityParams(stageActivity) == null) {
+                set.addActivityParams(
+                        new ScoringConfigGroup.ActivityParams(stageActivity).setScoringThisActivityAtAll(false));
+            }
+        }
+    }
+
+    /**
+     * Mode constants by purpose group and mode, from the CSV named by
+     * 'matsim.mode.constants.file' (header group,mode,constant; car is 0 and not listed).
+     * Read once; fails if any group/mode combination is missing.
+     */
+    private Map<String, Map<String, Double>> getModeConstants() {
+        if (modeConstants != null) {
+            return modeConstants;
+        }
+        Path path = Path.of(properties.main.baseDirectory + properties.healthData.modeConstantsFile);
+        Map<String, Map<String, Double>> constants = new HashMap<>();
+        try (BufferedReader reader = Files.newBufferedReader(path)) {
+            List<String> header = Arrays.asList(reader.readLine().trim().split(","));
+            int groupIndex = header.indexOf("group");
+            int modeIndex = header.indexOf("mode");
+            int constantIndex = header.indexOf("constant");
+            if (groupIndex < 0 || modeIndex < 0 || constantIndex < 0) {
+                throw new RuntimeException("Expected header group,mode,constant in " + path);
+            }
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+                String[] record = line.trim().split(",");
+                constants.computeIfAbsent(record[groupIndex].trim(), g -> new HashMap<>())
+                        .put(record[modeIndex].trim(), Double.parseDouble(record[constantIndex].trim()));
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Could not read mode constants from " + path
+                    + " (set 'matsim.mode.constants.file' in the properties file).", e);
+        }
+        for (String group : PURPOSE_GROUPS) {
+            for (String mode : List.of(CAR_PASSENGER, TransportMode.pt, TransportMode.walk, TransportMode.bike)) {
+                if (!constants.containsKey(group) || !constants.get(group).containsKey(mode)) {
+                    throw new RuntimeException("Mode constant missing for group " + group + ", mode " + mode
+                            + " in " + path);
+                }
+            }
+        }
+        logger.warn("Mode constants by purpose group from " + path + ": " + constants);
+        modeConstants = constants;
+        return modeConstants;
+    }
+
+    /**
+     * Purpose group of a MITO agent, from its "purpose" attribute (a MITO Purpose in memory, a
+     * string after a warm start). Unknown purposes are logged once and use the HBD constants.
+     */
+    private String purposeGroup(Person person) {
+        Object purpose = person.getAttributes().getAttribute("purpose");
+        String name = purpose == null ? "null" : purpose.toString();
+        switch (name) {
+            case "HBW":
+                return "HBW";
+            case "HBE":
+                return "HBE";
+            case "HBS":
+            case "HBR":
+            case "HBO":
+                return "HBD";
+            case "HBA":
+                return "HBA";
+            case "NHBW":
+            case "NHBO":
+                return "NHB";
+            default:
+                if (unmappedPurposes.add(name)) {
+                    logger.warn("No purpose group for purpose '" + name + "'; using " + DEFAULT_PURPOSE_GROUP + ".");
+                }
+                return DEFAULT_PURPOSE_GROUP;
         }
     }
 
