@@ -958,16 +958,33 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         // therefore needs the same time and waiting rates.
         Map<String, Map<String, Double>> constantsByGroup = getModeConstants();
         Map<String, Double> weatherShift = WeatherModeShifts.forDay(day);
-        fillScoringSet(config.scoring().getOrCreateScoringParameters(null),
-                constantsByGroup.get(DEFAULT_PURPOSE_GROUP), weatherShift);
-        // MATSim keeps the default set under the key null (that is the one it falls back to for
-        // a subpopulation without its own set, e.g. freight), but its consistency check refuses
-        // several sets unless one is also named "default". Fill that one identically.
-        fillScoringSet(config.scoring().getOrCreateScoringParameters(ScoringConfigGroup.DEFAULT_SUBPOPULATION),
-                constantsByGroup.get(DEFAULT_PURPOSE_GROUP), weatherShift);
-        for (String group : PURPOSE_GROUPS) {
-            fillScoringSet(config.scoring().getOrCreateScoringParameters(SUBPOP_PERSON + "_" + group),
-                    constantsByGroup.get(group), weatherShift);
+        // Activity types defined in the base config file live in the unnamed set, which is
+        // about to be replaced; remember them so that every set keeps them (the freight plans
+        // may use activity types beyond the MITO ones).
+        List<ScoringConfigGroup.ActivityParams> baseActivities = new ArrayList<>(config.scoring().getActivityParams());
+
+        // ORDER MATTERS. In MATSim 2025.0, adding a set for a subpopulation that has none yet
+        // REMOVES the unnamed (null-key) set: the "does one exist already?" lookup falls back to
+        // the unnamed set and then replaces it. So the named sets are created first and the
+        // unnamed one last (adding it removes nothing). All three kinds are needed:
+        //   "default"  required by the consistency check as soon as there are several sets;
+        //   "freight"  so trucks / through traffic never depend on the fallback;
+        //   unnamed    what config.scoring() itself delegates to (raptor) and the fallback.
+        List<String> namedSets = new ArrayList<>(List.of(ScoringConfigGroup.DEFAULT_SUBPOPULATION, SUBPOP_FREIGHT));
+        namedSets.addAll(PERSON_SUBPOPS);
+        namedSets.add(null);    // the unnamed set, last
+        for (String subpopulation : namedSets) {
+            ScoringConfigGroup.ScoringParameterSet set = config.scoring().getOrCreateScoringParameters(subpopulation);
+            String group = subpopulation != null && subpopulation.startsWith(SUBPOP_PERSON + "_")
+                    ? subpopulation.substring(SUBPOP_PERSON.length() + 1) : DEFAULT_PURPOSE_GROUP;
+            fillScoringSet(set, constantsByGroup.get(group), weatherShift);
+            for (ScoringConfigGroup.ActivityParams base : baseActivities) {
+                if (set.getActivityParams(base.getActivityType()) == null) {
+                    ScoringConfigGroup.ActivityParams copy = new ScoringConfigGroup.ActivityParams(base.getActivityType());
+                    base.getParams().forEach(copy::addParam);
+                    set.addActivityParams(copy);
+                }
+            }
         }
 
         // --- JIBE bike/walk routing inputs (as in fillBikePedConfig) ---
