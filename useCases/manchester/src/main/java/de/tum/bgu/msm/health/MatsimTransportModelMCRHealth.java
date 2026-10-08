@@ -960,6 +960,11 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         Map<String, Double> weatherShift = WeatherModeShifts.forDay(day);
         fillScoringSet(config.scoring().getOrCreateScoringParameters(null),
                 constantsByGroup.get(DEFAULT_PURPOSE_GROUP), weatherShift);
+        // MATSim keeps the default set under the key null (that is the one it falls back to for
+        // a subpopulation without its own set, e.g. freight), but its consistency check refuses
+        // several sets unless one is also named "default". Fill that one identically.
+        fillScoringSet(config.scoring().getOrCreateScoringParameters(ScoringConfigGroup.DEFAULT_SUBPOPULATION),
+                constantsByGroup.get(DEFAULT_PURPOSE_GROUP), weatherShift);
         for (String group : PURPOSE_GROUPS) {
             fillScoringSet(config.scoring().getOrCreateScoringParameters(SUBPOP_PERSON + "_" + group),
                     constantsByGroup.get(group), weatherShift);
