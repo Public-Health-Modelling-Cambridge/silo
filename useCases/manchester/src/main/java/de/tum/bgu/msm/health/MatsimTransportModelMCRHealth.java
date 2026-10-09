@@ -132,6 +132,10 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
     // replaces the pt travel rate during the wait, on top of the opportunity cost; 0 would
     // value waiting as car time.
     private static final double WAITING_PT = TRAV_PT;
+    // NOT an estimated parameter: the waiting weight used for pt ROUTE generation only (the
+    // unnamed scoring set, which SwissRailRaptor reads). It is the conventional weight of the
+    // pre-MNL5 setup, -2 x value of time, i.e. an effective wait of -3 x PERFORMING per hour.
+    private static final double ROUTING_WAITING_PT = -2 * PERFORMING;
     private static final double PT_FARE_PER_BOARDING = -0.3665; // utils = b_cost * GBP 1
     private static final double MONETARY_RATE_CAR = -0.00015;   // GBP/m
     private static final double MONETARY_RATE_PT = -0.0001;     // GBP/m; car passenger, walk, bike pay nothing
@@ -886,7 +890,11 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         // link capacities.
         config.transit().setUsingTransitInMobsim(true);
         config.transit().setTransitModes(Set.of("pt"));
-        ConfigUtils.addOrGetModule(config, SwissRailRaptorConfigGroup.class);
+        // Raptor builds its routing parameters from config.scoring(), i.e. the unnamed scoring
+        // set (see the scoring block below). Set explicitly so that an edit to the base config
+        // cannot silently switch it to per-person parameters.
+        SwissRailRaptorConfigGroup raptorConfig = ConfigUtils.addOrGetModule(config, SwissRailRaptorConfigGroup.class);
+        raptorConfig.setScoringParameters(SwissRailRaptorConfigGroup.ScoringParameters.Default);
 
         // Set scale factor. One QSim → one flowCapFactor: the car sample governs road
         // capacity. Bike/walk are teleported and consume no capacity, so the separate
@@ -978,6 +986,22 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
             String group = subpopulation != null && subpopulation.startsWith(SUBPOP_PERSON + "_")
                     ? subpopulation.substring(SUBPOP_PERSON.length() + 1) : DEFAULT_PURPOSE_GROUP;
             fillScoringSet(set, constantsByGroup.get(group), weatherShift);
+            // Routing weights for SwissRailRaptor (it reads the unnamed set via config.scoring()).
+            // Mode choice is NOT affected: every subpopulation has its own named set.
+            // Waiting in the estimation was not observed (absorbed in the pt ASC); for route
+            // generation use the conventional weight of the pre-MNL5 setup, which produced
+            // realistic routes (DARE: median wait ~5 min): waitingPt = -2 x value of time,
+            // i.e. effective wait = -3 x PERFORMING per hour. With the estimated rate a minute
+            // of waiting cost less than a quarter of a minute of walking, so the router took
+            // the nearest stop and accepted very long waits.
+            // Everything else in the unnamed set stays as estimated: MATSim's car router also
+            // reads car time, money and distance from config.scoring().
+            // Modelling assumption: pt routes are generated with a conventional waiting weight
+            // while mode choice uses the estimated utility. This mirrors the estimation, where
+            // pt level-of-service also came from a separate routing run.
+            if (subpopulation == null) {
+                set.setMarginalUtlOfWaitingPt_utils_hr(ROUTING_WAITING_PT);
+            }
             for (ScoringConfigGroup.ActivityParams base : baseActivities) {
                 if (set.getActivityParams(base.getActivityType()) == null) {
                     ScoringConfigGroup.ActivityParams copy = new ScoringConfigGroup.ActivityParams(base.getActivityType());
