@@ -13,10 +13,11 @@ public class TripSelector {
      *
      * @param mitoTripsAll The original map of trips (key: Integer, value: Trip)
      * @param subsetSize   The desired size of the subset (must be <= original map size)
+     * @param random The random number generator
      * @return A new map containing the randomly selected subset of trips
      * @throws IllegalArgumentException if subsetSize is larger than original map size
      */
-    public static Map<Integer, Trip> selectRandomSubset(Map<Integer, Trip> mitoTripsAll, int subsetSize) {
+    public static Map<Integer, Trip> selectRandomSubset(Map<Integer, Trip> mitoTripsAll, int subsetSize, Random random) {
         if (subsetSize > mitoTripsAll.size()) {
             throw new IllegalArgumentException("Subset size cannot be larger than original map size");
         }
@@ -25,7 +26,6 @@ public class TripSelector {
         Set<Integer> keys = mitoTripsAll.keySet();
         Integer[] keyArray = keys.toArray(new Integer[0]);
 
-        Random random = new Random();
         Map<Integer, Trip> subset = new HashMap<>();
 
         // Select random keys until we reach the desired subset size
