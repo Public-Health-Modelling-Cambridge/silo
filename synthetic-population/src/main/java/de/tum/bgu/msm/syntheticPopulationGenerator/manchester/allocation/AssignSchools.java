@@ -169,7 +169,7 @@ public class AssignSchools {
                 pp.setWorkplace(-1);
             }
         }
-        Collections.shuffle(studentArrayList);
+        Collections.shuffle(studentArrayList, SiloUtil.getRandomObject());
         assignedStudents = 0;
     }
 

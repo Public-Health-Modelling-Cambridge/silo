@@ -156,7 +156,7 @@ public class AssignJobs {
                 pp.setWorkplace(-1);
             }
         }
-        Collections.shuffle(workerArrayList);
+        Collections.shuffle(workerArrayList, SiloUtil.getRandomObject());
         assignedJobs = 0;
     }
 
