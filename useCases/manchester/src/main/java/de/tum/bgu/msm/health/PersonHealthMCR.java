@@ -207,7 +207,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
     @Override
-    public void updateWeeklyTravelSeconds(float seconds) {
+    public synchronized void updateWeeklyTravelSeconds(float seconds) {
         weeklyTravelSeconds += seconds;
     }
 
@@ -217,17 +217,17 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
     @Override
-    public void updateWeeklyActivityMinutes(float minutes) {
+    public synchronized void updateWeeklyActivityMinutes(float minutes) {
         weeklyActivityMinutes += minutes; }
 
     @Override
     public float getWeeklyActivityMinutes() { return weeklyActivityMinutes; }
 
     @Override
-    public void setWeeklyHomeMinutes(float minutes) { this.weeklyHomeMinutes = minutes; }
+    public synchronized void setWeeklyHomeMinutes(float minutes) { this.weeklyHomeMinutes = minutes; }
 
     @Override
-    public void updateWeeklyHomeMinutes(float minutes) { this.weeklyHomeMinutes += minutes; }
+    public synchronized void updateWeeklyHomeMinutes(float minutes) { this.weeklyHomeMinutes += minutes; }
 
     @Override
     public float getWeeklyHomeMinutes() { return weeklyHomeMinutes; }
@@ -238,7 +238,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
     @Override
-    public void updateWeeklyMarginalMetHours(Mode mode, float mmetHours) {
+    public synchronized void updateWeeklyMarginalMetHours(Mode mode, float mmetHours) {
         weeklyMarginalMetHours.put(mode, weeklyMarginalMetHours.getOrDefault(mode, 0.f) + mmetHours);
     }
 
@@ -247,7 +247,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
         return weeklyMarginalMetHoursSport;
     }
 
-    public void setWeeklyMarginalMetHoursSport(float weeklyMarginalMetHoursSport) {
+    public synchronized void setWeeklyMarginalMetHoursSport(float weeklyMarginalMetHoursSport) {
         this.weeklyMarginalMetHoursSport = weeklyMarginalMetHoursSport;
     }
 
@@ -257,7 +257,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
     @Override
-    public void updateWeeklyPollutionExposuresByHour(Map<String, float[]> newExposures) {
+    public synchronized void updateWeeklyPollutionExposuresByHour(Map<String, float[]> newExposures) {
         for (String pollutant : newExposures.keySet()) {
             if (!weeklyExposureByPollutantByHour.containsKey(pollutant)) {
                 weeklyExposureByPollutantByHour.put(pollutant, newExposures.get(pollutant));
@@ -275,7 +275,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
     @Override
-    public void setWeeklyExposureByPollutantNormalised(Map<String, Float> exposureMap) {
+    public synchronized void setWeeklyExposureByPollutantNormalised(Map<String, Float> exposureMap) {
         this.weeklyExposureByPollutantNormalised = exposureMap;
     }
 
@@ -285,7 +285,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
     @Override
-    public void updateWeeklyAccidentRisks(Map<String, Double> newRisks) {
+    public synchronized void updateWeeklyAccidentRisks(Map<String, Double> newRisks) {
         //newRisks.forEach((k, v) -> weeklyAccidentRisks.merge(k, v, (v1, v2) -> v1 + v2 - v1*v2));
         newRisks.forEach((k, v) -> weeklyAccidentRisks.merge(k, v, (v1, v2) -> v1 + v2));
     }
@@ -295,7 +295,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
     @Override
-    public void updateWeeklyNoiseExposuresByHour(float[] newExposure) {
+    public synchronized void updateWeeklyNoiseExposuresByHour(float[] newExposure) {
         for(int i=0; i<newExposure.length; i++) {
             this.weeklyNoiseExposureByHour[i] += newExposure[i];
         }
@@ -307,7 +307,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
     @Override
-    public void setWeeklyNoiseExposuresNormalised(float noiseExposureNormalised) {
+    public synchronized void setWeeklyNoiseExposuresNormalised(float noiseExposureNormalised) {
         this.weeklyNoiseExposureNormalised = noiseExposureNormalised ;
     }
 
@@ -316,7 +316,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
     @Override
-    public void updateWeeklyGreenExposures(float greenExposure) {
+    public synchronized void updateWeeklyGreenExposures(float greenExposure) {
         this.weeklyNdviExposure += greenExposure;
     }
 
@@ -326,7 +326,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
     @Override
-    public void setWeeklyGreenExposuresNormalised(float greenExposureNormalised) {
+    public synchronized void setWeeklyGreenExposuresNormalised(float greenExposureNormalised) {
         this.weeklyNdviExposureNormalised = greenExposureNormalised;
     }
 
@@ -341,7 +341,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
     @Override
-    public void updateWeeklyHourOccupiedByRail(float[] hourOccupied) {
+    public synchronized void updateWeeklyHourOccupiedByRail(float[] hourOccupied) {
         for(int i=0; i<hourOccupied.length; i++) {
             this.weeklyHourOccupiedByRail[i] += hourOccupied[i];
         }
@@ -353,14 +353,14 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
     @Override
-    public void updateWeeklyHourOccupiedByTransit(float[] hourOccupied) {
+    public synchronized void updateWeeklyHourOccupiedByTransit(float[] hourOccupied) {
         for(int i=0; i<hourOccupied.length; i++) {
             this.weeklyHourOccupiedByTransit[i] += hourOccupied[i];
         }
     }
 
     @Override
-    public void updateWeeklyTravelActivityHourOccupied(float[] hourOccupied) {
+    public synchronized void updateWeeklyTravelActivityHourOccupied(float[] hourOccupied) {
         for(int i=0; i<hourOccupied.length; i++) {
             this.weeklyTravelActivityHourOccupied[i] += hourOccupied[i];
         }
@@ -421,13 +421,13 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
         return visitedLinks;
     }
 
-    void addVisitedLinks(List<VisitedLink> visitedLink){
+    synchronized void addVisitedLinks(List<VisitedLink> visitedLink){
         this.visitedLinks.addAll(visitedLink);
     }
 
     //For Munich
     @Override
-    public void updateWeeklyPollutionExposures(Map<String, Float> exposureMap) {}
+    public synchronized void updateWeeklyPollutionExposures(Map<String, Float> exposureMap) {}
 
     @Override
     public void setRelativeRisks(Map<String, Float> relativeRisks) {}
