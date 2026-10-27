@@ -799,8 +799,8 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                 continue;
             }
 
-            double legPartExposurePm25 = PollutionExposure.getLinkExposurePm25_newexp(legMode, properties.get().healthData.DEFAULT_ROAD_TRAFFIC_INCREMENTAL_PM25, legTime_s, legMarginalMet, "none", "none", 1);
-            double legPartExposureNo2 = PollutionExposure.getLinkExposureNo2_newexp(legMode, properties.get().healthData.DEFAULT_ROAD_TRAFFIC_INCREMENTAL_NO2,legTime_s, legMarginalMet, "none", "none", 1);
+            double legPartExposurePm25 = PollutionExposure.getLinkExposurePm25_newexp(legMode, properties.get().healthData.DEFAULT_ROAD_TRAFFIC_INCREMENTAL_PM25, durationInThisHour * 3600, legMarginalMet, "none", "none", 1);
+            double legPartExposureNo2 = PollutionExposure.getLinkExposureNo2_newexp(legMode, properties.get().healthData.DEFAULT_ROAD_TRAFFIC_INCREMENTAL_NO2, durationInThisHour * 3600, legMarginalMet, "none", "none", 1);
 
             legExposurePm25ByHour[exactWeekHour] += legPartExposurePm25;
             legExposureNo2ByHour[exactWeekHour] += legPartExposureNo2;
@@ -1387,6 +1387,8 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                 // new ventilation
                 double exposurePM25 = PollutionExposure.getActivityExposurePm25_newvent(durationInThisHour * 60, sportweekmMETh, locationIncrementalPM25);
                 double exposureNo2 = PollutionExposure.getActivityExposureNo2_newvent(durationInThisHour * 60, sportweekmMETh, locationIncrementalNO2);
+                activityExposurePM25ByHour[exactWeekHour] = (float) exposurePM25;
+                activityExposureNo2ByHour[exactWeekHour] = (float) exposureNo2;
                 activityExposurePM25 += exposurePM25;
                 activityExposureNo2 += exposureNo2;
 
