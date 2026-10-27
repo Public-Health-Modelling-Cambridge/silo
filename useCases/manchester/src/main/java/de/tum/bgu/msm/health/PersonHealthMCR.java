@@ -21,9 +21,9 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     private int schoolId = -1;
     private Ethnic ethnic = null;
 
-    private float weeklyTravelSeconds = 0.f;
-    private float weeklyActivityMinutes = 0.f;
-    private float weeklyHomeMinutes = 0.f;
+    private int weeklyTravelMilliseconds = 0;
+    private int weeklyActivityMilliseconds = 0;
+    private int weeklyHomeMilliseconds = 0;
     private float[] weeklyTravelActivityHourOccupied = new float[24*7];
     private float[] weeklyHourOccupiedByRail = new float[24*7];
     private float[] weeklyHourOccupiedByTransit = new float[24*7];
@@ -208,29 +208,38 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
 
     @Override
     public synchronized void updateWeeklyTravelSeconds(float seconds) {
-        weeklyTravelSeconds += seconds;
+        weeklyTravelMilliseconds += Math.round(seconds * 1000.0f);
     }
 
     @Override
     public float getWeeklyTravelSeconds() {
-        return weeklyTravelSeconds;
+        return weeklyTravelMilliseconds / 1000.0f;
     }
 
     @Override
     public synchronized void updateWeeklyActivityMinutes(float minutes) {
-        weeklyActivityMinutes += minutes; }
+        weeklyActivityMilliseconds += Math.round(minutes * 60000.0f);
+    }
 
     @Override
-    public float getWeeklyActivityMinutes() { return weeklyActivityMinutes; }
+    public float getWeeklyActivityMinutes() {
+    	return weeklyActivityMilliseconds / 60000.0f;
+    }
 
     @Override
-    public synchronized void setWeeklyHomeMinutes(float minutes) { this.weeklyHomeMinutes = minutes; }
+    public synchronized void setWeeklyHomeMinutes(float minutes) {
+    	this.weeklyHomeMilliseconds = Math.round(minutes * 60000.0f);
+    }
 
     @Override
-    public synchronized void updateWeeklyHomeMinutes(float minutes) { this.weeklyHomeMinutes += minutes; }
+    public synchronized void updateWeeklyHomeMinutes(float minutes) {
+    	this.weeklyHomeMilliseconds += Math.round(minutes * 60000.0f);
+    }
 
     @Override
-    public float getWeeklyHomeMinutes() { return weeklyHomeMinutes; }
+    public float getWeeklyHomeMinutes() {
+    	return weeklyHomeMilliseconds / 60000.0f;
+    }
 
     @Override
     public float getWeeklyMarginalMetHours(Mode mode) {
@@ -388,8 +397,9 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
     public void resetHealthData(){
-        weeklyTravelSeconds = 0.f;
-        weeklyActivityMinutes = 0.f;
+        weeklyTravelMilliseconds = 0;
+        weeklyActivityMilliseconds = 0;
+        weeklyHomeMilliseconds = 0;
         weeklyMarginalMetHours.clear();
         weeklyAccidentRisks.clear();
         weeklyExposureByPollutantByHour.clear();
