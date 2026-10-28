@@ -386,7 +386,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
         }
     }
 
-    public void updateWeeklyActivityHourOccupied(float[] hourOccupied) {
+    public synchronized void updateWeeklyActivityHourOccupied(float[] hourOccupied) {
         for(int i=0; i<hourOccupied.length; i++) {
             this.weeklyActivityHourOccupied[i] += hourOccupied[i];
         }
@@ -397,7 +397,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     }
 
     // adds to the total hourly exposure and to the hourly exposure of the given source (travel, activity or home)
-    public void updateWeeklyPollutionExposuresByHour(String source, Map<String, float[]> newExposures) {
+    public synchronized void updateWeeklyPollutionExposuresByHour(String source, Map<String, float[]> newExposures) {
         updateWeeklyPollutionExposuresByHour(newExposures);
         Map<String, float[]> exposureByPollutant = weeklyExposureBySourceByPollutantByHour.computeIfAbsent(source, k -> new HashMap<>());
         for (String pollutant : newExposures.keySet()) {
@@ -413,7 +413,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
         return weeklyExposureBySourceByPollutantByHour.getOrDefault(source, Collections.emptyMap());
     }
 
-    public void setWeeklyExposureBySourceNormalised(String source, String pollutant, float exposure) {
+    public synchronized void setWeeklyExposureBySourceNormalised(String source, String pollutant, float exposure) {
         weeklyExposureBySourceNormalised.put(source + "_" + pollutant, exposure);
     }
 
@@ -421,7 +421,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
         return weeklyExposureBySourceNormalised.get(source + "_" + pollutant);
     }
 
-    public void setWeeklyExposureBySourceAverage(String source, String pollutant, float exposure) {
+    public synchronized void setWeeklyExposureBySourceAverage(String source, String pollutant, float exposure) {
         weeklyExposureBySourceAverage.put(source + "_" + pollutant, exposure);
     }
 
