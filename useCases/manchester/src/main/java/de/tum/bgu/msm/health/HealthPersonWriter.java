@@ -13,6 +13,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.PrintWriter;
+import java.util.List;
 
 public class HealthPersonWriter implements PersonWriter {
 
@@ -27,6 +28,17 @@ public class HealthPersonWriter implements PersonWriter {
 
     @Override
     public void writePersons(String path) {
+    }
+
+    private static final List<String> EXPOSURE_POLLUTANTS = List.of("pm2.5", "no2");
+
+    private static String getPollutantLabel(String pollutant) {
+        return pollutant.replace(".", "");
+    }
+
+    // NA if not calculated, e.g. persons read from an exposure file or no time spent at the source
+    private static String formatExposure(Float exposure) {
+        return (exposure == null || exposure.isNaN()) ? "NA" : String.valueOf(exposure);
     }
 
     public void writePersonExposure(String path) {
@@ -79,6 +91,18 @@ public class HealthPersonWriter implements PersonWriter {
         pwp.print("exposure_noise_HA");
         pwp.print(",");
         pwp.print("exposure_noise_HSD");
+        // decomposition of air pollution exposure by source: contribution to the normalised exposure (sums up to it)
+        // and average normalised exposure while at the source
+        for (String pollutant : EXPOSURE_POLLUTANTS) {
+            for (String source : PersonHealthMCR.EXPOSURE_SOURCES) {
+                pwp.print(",exposure_normalised_" + getPollutantLabel(pollutant) + "_" + source);
+            }
+        }
+        for (String pollutant : EXPOSURE_POLLUTANTS) {
+            for (String source : PersonHealthMCR.EXPOSURE_SOURCES) {
+                pwp.print(",exposure_avg_" + getPollutantLabel(pollutant) + "_" + source);
+            }
+        }
         pwp.println();
 
         for (Person pp : householdData.getPersons()) {
@@ -145,6 +169,18 @@ public class HealthPersonWriter implements PersonWriter {
             pwp.print((((PersonHealthMCR) pp).getNoiseHighAnnoyedPercentage()));
             pwp.print(",");
             pwp.print((((PersonHealthMCR) pp).getNoiseHighSleepDisturbancePercentage()));
+            for (String pollutant : EXPOSURE_POLLUTANTS) {
+                for (String source : PersonHealthMCR.EXPOSURE_SOURCES) {
+                    pwp.print(",");
+                    pwp.print(formatExposure(((PersonHealthMCR) pp).getWeeklyExposureBySourceNormalised(source, pollutant)));
+                }
+            }
+            for (String pollutant : EXPOSURE_POLLUTANTS) {
+                for (String source : PersonHealthMCR.EXPOSURE_SOURCES) {
+                    pwp.print(",");
+                    pwp.print(formatExposure(((PersonHealthMCR) pp).getWeeklyExposureBySourceAverage(source, pollutant)));
+                }
+            }
             pwp.println();
             if (pp.getId() == SiloUtil.trackPp) {
                 SiloUtil.trackingFile("Writing pp " + pp.getId() + " to micro data file.");

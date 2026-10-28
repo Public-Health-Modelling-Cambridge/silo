@@ -35,6 +35,17 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     private Map<String, float[]> weeklyExposureByPollutantByHour = new HashMap<>();
     private Map<String, Float> weeklyExposureByPollutantNormalised;
 
+    // decomposition of air pollution exposure by source (travel, activity, home)
+    public static final String EXPOSURE_TRAVEL = "travel";
+    public static final String EXPOSURE_ACTIVITY = "activity";
+    public static final String EXPOSURE_HOME = "home";
+    public static final List<String> EXPOSURE_SOURCES = List.of(EXPOSURE_TRAVEL, EXPOSURE_ACTIVITY, EXPOSURE_HOME);
+    private Map<String, Map<String, float[]>> weeklyExposureBySourceByPollutantByHour = new HashMap<>();
+    private float[] weeklyActivityHourOccupied = new float[24*7];
+    // key: source + "_" + pollutant, e.g. "travel_pm2.5"
+    private Map<String, Float> weeklyExposureBySourceNormalised = new HashMap<>();
+    private Map<String, Float> weeklyExposureBySourceAverage = new HashMap<>();
+
     private float[] weeklyNoiseExposureByHour = new float[24*7];
     private float weeklyNoiseExposureNormalised;
     private float noiseHighAnnoyedPercentage = 0.f;
@@ -375,6 +386,49 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
         }
     }
 
+    public void updateWeeklyActivityHourOccupied(float[] hourOccupied) {
+        for(int i=0; i<hourOccupied.length; i++) {
+            this.weeklyActivityHourOccupied[i] += hourOccupied[i];
+        }
+    }
+
+    public float[] getWeeklyActivityHourOccupied() {
+        return weeklyActivityHourOccupied;
+    }
+
+    // adds to the total hourly exposure and to the hourly exposure of the given source (travel, activity or home)
+    public void updateWeeklyPollutionExposuresByHour(String source, Map<String, float[]> newExposures) {
+        updateWeeklyPollutionExposuresByHour(newExposures);
+        Map<String, float[]> exposureByPollutant = weeklyExposureBySourceByPollutantByHour.computeIfAbsent(source, k -> new HashMap<>());
+        for (String pollutant : newExposures.keySet()) {
+            float[] newExposure = newExposures.get(pollutant);
+            float[] exposure = exposureByPollutant.computeIfAbsent(pollutant, k -> new float[newExposure.length]);
+            for(int i = 0; i < exposure.length; i++) {
+                exposure[i] += newExposure[i];
+            }
+        }
+    }
+
+    public Map<String, float[]> getWeeklyPollutionExposuresBySource(String source) {
+        return weeklyExposureBySourceByPollutantByHour.getOrDefault(source, Collections.emptyMap());
+    }
+
+    public void setWeeklyExposureBySourceNormalised(String source, String pollutant, float exposure) {
+        weeklyExposureBySourceNormalised.put(source + "_" + pollutant, exposure);
+    }
+
+    public Float getWeeklyExposureBySourceNormalised(String source, String pollutant) {
+        return weeklyExposureBySourceNormalised.get(source + "_" + pollutant);
+    }
+
+    public void setWeeklyExposureBySourceAverage(String source, String pollutant, float exposure) {
+        weeklyExposureBySourceAverage.put(source + "_" + pollutant, exposure);
+    }
+
+    public Float getWeeklyExposureBySourceAverage(String source, String pollutant) {
+        return weeklyExposureBySourceAverage.get(source + "_" + pollutant);
+    }
+
     @Override
     public EnumMap<HealthExposures, EnumMap<Diseases, Float>> getRelativeRisksByDisease() {
         return relativeRisksByDisease;
@@ -403,6 +457,10 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
         weeklyMarginalMetHours.clear();
         weeklyAccidentRisks.clear();
         weeklyExposureByPollutantByHour.clear();
+        weeklyExposureBySourceByPollutantByHour.clear();
+        Arrays.fill(weeklyActivityHourOccupied,0.f);
+        weeklyExposureBySourceNormalised.clear();
+        weeklyExposureBySourceAverage.clear();
         Arrays.fill(weeklyNoiseExposureByHour,0.f);
         weeklyNdviExposure = 0.f;
         Arrays.fill(weeklyTravelActivityHourOccupied,0.f);

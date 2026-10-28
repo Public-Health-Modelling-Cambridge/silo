@@ -21,8 +21,10 @@ import org.apache.logging.log4j.core.config.Configuration;
 import org.matsim.core.controler.Controler;
 
 import java.io.*;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.util.*;
 
@@ -64,7 +66,7 @@ public class SiloUtil {
 
         initializeRandomNumber(properties.main.randomSeed);
         trackingFile("open");
-        loadHdf5Lib();
+            loadHdf5Lib();
         return properties;
     }
 
@@ -95,65 +97,38 @@ public class SiloUtil {
     }
 
     public static void loadHdf5Lib() {
-        ClassLoader classLoader = SiloUtil.class.getClassLoader();
         logger.info("Trying to set up native hdf5 lib");
-        String path = null;
+        List<String> candidateLibs;
         if(SystemUtils.IS_OS_WINDOWS) {
             logger.info("Detected windows OS.");
-            try {
-                path = classLoader.getResource("lib/win32/jhdf5.dll").getFile();
-                System.load(path);
-            } catch(Throwable e) {
-                logger.debug("Cannot load 32 bit library. Trying 64 bit next.");
-                try {
-                    path = classLoader.getResource("lib/win64/jhdf5.dll").getFile();
-                    System.load(path);
-                }  catch(Throwable e2) {
-                    logger.debug("Cannot load 64 bit library.");
-                    path = null;
-                }
-            }
+            candidateLibs = Arrays.asList("lib/win32/jhdf5.dll", "lib/win64/jhdf5.dll");
         } else if(SystemUtils.IS_OS_MAC) {
             logger.info("Detected Mac OS.");
-            try {
-                path = classLoader.getResource("lib/macosx32/libjhdf5.jnilib").getFile();
-                System.load(path);
-            } catch(Throwable e) {
-                logger.debug("Cannot load 32 bit library. Trying 64 bit next.");
-                try {
-                    path = classLoader.getResource("lib/macosx64/libjhdf5.jnilib").getFile();
-                    System.load(path);
-                } catch(Throwable e2) {
-                    logger.debug("Cannot load 64 bit library.");
-                    path = null;
-                }
-            }
+            candidateLibs = Arrays.asList("lib/macosx32/libjhdf5.jnilib", "lib/macosx64/libjhdf5.jnilib");
         } else if(SystemUtils.IS_OS_LINUX) {
             logger.info("Detected linux OS.");
+            candidateLibs = Arrays.asList("lib/linux32/libjhdf5.so", "lib/linux64/libjhdf5.so");
+        } else {
+            candidateLibs = Collections.emptyList();
+        }
+
+        // try 32 bit first, then 64 bit. Loading a lib that doesn't match the JVM architecture is expected to fail
+        String path = null;
+        for(String lib : candidateLibs) {
             try {
-                URL url = classLoader.getResource("lib/linux32/libjhdf5.so");
-                if(url == null) {
-                    logger.info("Could not find linux 32 lib");
-                } else {
-                    path = url.getFile();
-                    System.load(path);
+                String libPath = getNativeLibPath(lib);
+                if(libPath == null) {
+                    logger.info("Could not find " + lib + " on classpath");
+                    continue;
                 }
+                System.load(libPath);
+                path = libPath;
+                break;
             } catch(Throwable e) {
-                logger.debug("Cannot load 32 bit library. Trying 64 bit next.");
-                try {
-                    URL url = classLoader.getResource("lib/linux64/libjhdf5.so");
-                    if(url == null) {
-                        logger.info("Could not find linux 64 lib");
-                    } else {
-                        path = url.getFile();
-                        System.load(path);
-                    }
-                } catch(Throwable e2) {
-                    logger.debug("Cannot load 64 bit library. ");
-                    path = null;
-                }
+                logger.info("Cannot load " + lib + ": " + e.getMessage());
             }
         }
+
         if(path != null) {
             logger.info("Hdf5 library successfully located.");
             System.setProperty("ncsa.hdf.hdf5lib.H5.hdf5lib", path);
@@ -162,6 +137,29 @@ public class SiloUtil {
                     " Any code involving omx matrices will only work if the " +
                     "library was set up in java.library.path");
         }
+    }
+
+    /**
+     * Returns a file system path to the native lib resource, or null if it is not on the classpath.
+     * The URL is decoded via toURI(), since URL.getFile() keeps e.g. spaces as %20 and System.load then fails.
+     * If the resource is inside a jar, it is copied to a temp file first, as System.load needs a real file.
+     */
+    private static String getNativeLibPath(String lib) throws IOException, URISyntaxException {
+        URL url = SiloUtil.class.getClassLoader().getResource(lib);
+        if(url == null) {
+            return null;
+        }
+        if("file".equals(url.getProtocol())) {
+            return Paths.get(url.toURI()).toString();
+        }
+        File tempDir = Files.createTempDirectory("silo-native").toFile();
+        tempDir.deleteOnExit();
+        File tempLib = new File(tempDir, lib.substring(lib.lastIndexOf('/') + 1));
+        try(InputStream in = url.openStream()) {
+            Files.copy(in, tempLib.toPath(), REPLACE_EXISTING);
+        }
+        tempLib.deleteOnExit();
+        return tempLib.getAbsolutePath();
     }
 
     public static void createDirectoryIfNotExistingYet (String directory) {
