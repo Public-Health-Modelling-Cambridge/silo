@@ -36,6 +36,7 @@ import org.matsim.contrib.analysis.vsp.traveltimedistance.TripsExtractor;
 import org.matsim.contrib.dvrp.trafficmonitoring.TravelTimeUtils;
 import org.matsim.contrib.emissions.Pollutant;
 import org.matsim.core.config.Config;
+import org.matsim.core.config.ConfigGroup;
 import org.matsim.core.controler.ControlerDefaults;
 import org.matsim.core.network.NetworkUtils;
 import org.matsim.core.population.PopulationUtils;
@@ -46,6 +47,7 @@ import org.matsim.core.router.util.TravelTime;
 import org.matsim.core.scenario.MutableScenario;
 import org.matsim.core.scenario.ScenarioUtils;
 import org.matsim.core.utils.geometry.CoordUtils;
+import org.matsim.vehicles.MatsimVehicleReader;
 import org.matsim.vehicles.Vehicle;
 import org.matsim.vehicles.VehicleType;
 import org.matsim.vehicles.VehicleUtils;
@@ -82,6 +84,15 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
     // private Map<Day, Map<String, Map<Id<Link>, Map<Integer, Integer>>>> trafficFlowsByDayModeLinkHour = new HashMap<>();
     private Map<Day, Map<String, Map<Id<Link>, Map<Integer, Integer>>>> trafficFlowsByDayModeLinkHour = new ConcurrentHashMap<>();
 
+    // Data that is the same for several days/modes is loaded once and kept until another day needs different data.
+    // Days are simulated in order, so only one day's data is held at a time.
+    private Day loadedLinkDataDay = null;
+    private Day loadedLocationDataDay = null;
+    private Network network = null;
+    private Network activeNetwork = null;
+    private TravelTime carTravelTime = null;
+    private Day carTravelTimeDay = null;
+
     public HealthExposureModelMCR(DataContainer dataContainer, Properties properties, Random random, Config config) {
         super(dataContainer, properties, random);
         this.initialMatsimConfig = config;
@@ -108,6 +119,9 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
             TreeSet<Integer> sortedYears = new TreeSet<>(properties.transportModel.transportModelYears);
             latestMatsimYear = sortedYears.floor(year);
             latestMITOYear = year;
+            // travel times come from the events of the latest MATSim year, which can differ between exposure years
+            carTravelTime = null;
+            carTravelTimeDay = null;
             List<Day> completedDays = new ArrayList<>();
 
             Map<Integer, Trip> mitoTripsAll = new TripReaderHealth().readData(properties.main.baseDirectory + "scenOutput/"
@@ -139,16 +153,13 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                 logger.warn("Health model setup for " + day);
 
                 // Use 'thursday' for weekdays in healthDataAssembler, otherwise use the actual day
-                Day dayForHealthData = weekdays.contains(day)
-                        ? Day.thursday
-                        : day;
+                Day dayForHealthData = getHealthDataDay(day);
 
-                replyLinkInfoFromFile(dayForHealthData);
+                loadLinkData(dayForHealthData);
                 logger.warn("Link info for " + dayForHealthData + " loaded.");
 
-                replyActivityLocationInfoFromFile(dayForHealthData);
+                loadLocationData(dayForHealthData);
                 logger.warn("Activity info for " + dayForHealthData + " loaded.");
-                System.gc();
 
                 logger.warn("Run health exposure model for " + day);
 
@@ -220,9 +231,6 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
 
                 writeAndClearTrafficFlows(year, networkFull, day);
 
-                // Reset
-                ((DataContainerHealth) dataContainer).getLinkInfo().values().forEach(linkInfo -> {linkInfo.reset();});
-
                 //
                 /*
                 if(completedDays.contains(Day.sunday)){
@@ -239,10 +247,6 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                     });
                 }
                  */
-
-                //
-                ((DataContainerHealth) dataContainer).getActivityLocations().values().forEach(activityLocation -> {activityLocation.reset();});
-                //System.gc();
             }
 
             // TODO: free memory
@@ -252,12 +256,13 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
 
 
             // assemble home location health exposure data
+            // Day.values() runs monday to sunday, so the weekdays reuse the loaded thursday data
             for(Day day : Day.values()){
-                replyActivityLocationInfoFromFile(weekdays.contains(day) ? Day.thursday : day);
+                loadLocationData(getHealthDataDay(day));
                 calculatePersonHealthExposuresAtHome(day);
-                ((DataContainerHealth)dataContainer).getActivityLocations().values().forEach(activityLocation -> {activityLocation.reset();});
-                System.gc();
             }
+            clearLinkData();
+            clearLocationData();
 
             // normalize person-level home-travel-activity exposure
             calculatePersonHealthExposureMetrics();
@@ -572,6 +577,42 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
         }
     }
 
+    private Day getHealthDataDay(Day day) {
+        return weekdays.contains(day) ? Day.thursday : day;
+    }
+
+    // link concentration and noise data, read only if a different day than the loaded one is needed
+    private void loadLinkData(Day day) {
+        if (day.equals(loadedLinkDataDay)) {
+            return;
+        }
+        // the readers add up values, so the data of the previously loaded day has to be cleared first
+        clearLinkData();
+        replyLinkInfoFromFile(day);
+        loadedLinkDataDay = day;
+    }
+
+    // activity location concentration and noise data, read only if a different day than the loaded one is needed
+    private void loadLocationData(Day day) {
+        if (day.equals(loadedLocationDataDay)) {
+            return;
+        }
+        clearLocationData();
+        replyActivityLocationInfoFromFile(day);
+        loadedLocationDataDay = day;
+        System.gc();
+    }
+
+    private void clearLinkData() {
+        ((DataContainerHealth) dataContainer).getLinkInfo().values().forEach(LinkInfo::reset);
+        loadedLinkDataDay = null;
+    }
+
+    private void clearLocationData() {
+        ((DataContainerHealth) dataContainer).getActivityLocations().values().forEach(ActivityLocation::reset);
+        loadedLocationDataDay = null;
+    }
+
     private void replyLinkInfoFromFile(Day day) {
         String outputDirectory = properties.main.baseDirectory + "scenOutput/" + properties.main.scenarioName + "/";
 
@@ -606,11 +647,22 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
         final String outputDirectoryRoot = properties.main.baseDirectory + "scenOutput/"
                 + properties.main.scenarioName + "/matsim/" + latestMatsimYear;
 
+        // the network is read once and shared by all days and modes; each call gets a fresh scenario,
+        // because vehicle types and config modules are added to it per mode
         scenario = ScenarioUtils.createMutableScenario(initialMatsimConfig);
-        ScenarioUtils.loadScenario(scenario);
+        if (network == null) {
+            ScenarioUtils.loadScenario(scenario);
+            network = scenario.getNetwork();
+        } else {
+            scenario.setNetwork(network);
+            new MatsimVehicleReader(scenario.getVehicles()).readURL(
+                    ConfigGroup.getInputFileURL(initialMatsimConfig.getContext(), initialMatsimConfig.vehicles().getVehiclesFile()));
+        }
 
         if (mode.equals(Mode.walk) || mode.equals(Mode.bicycle)) {
-            Network activeNetwork = extractModeSpecificNetwork(scenario.getNetwork(),new HashSet<>(Arrays.asList(TransportMode.bike, TransportMode.walk)));
+            if (activeNetwork == null) {
+                activeNetwork = extractModeSpecificNetwork(network, new HashSet<>(Arrays.asList(TransportMode.bike, TransportMode.walk)));
+            }
             scenario.setNetwork(activeNetwork);
         }
 
@@ -847,8 +899,13 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
         switch (mode){
             case autoDriver:
             case autoPassenger:
-                String eventsFile = scenario.getConfig().controller().getOutputDirectory() + "/" + day + "/car/" + latestMatsimYear + ".output_events.xml.gz";
-                travelTime = TravelTimeUtils.createTravelTimesFromEvents(scenario.getNetwork(),scenario.getConfig(), eventsFile);
+                // car driver and passenger, and all weekdays (thursday events) share the travel times of one events file
+                if (!day.equals(carTravelTimeDay)) {
+                    String eventsFile = scenario.getConfig().controller().getOutputDirectory() + "/" + day + "/car/" + latestMatsimYear + ".output_events.xml.gz";
+                    carTravelTime = TravelTimeUtils.createTravelTimesFromEvents(scenario.getNetwork(), scenario.getConfig(), eventsFile);
+                    carTravelTimeDay = day;
+                }
+                travelTime = carTravelTime;
                 travelDisutility = ControlerDefaults.createDefaultTravelDisutilityFactory(scenario).createTravelDisutility(travelTime);
                 break;
             case walk:
