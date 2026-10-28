@@ -821,7 +821,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
         PersonHealth siloPerson = ((PersonHealth)dataContainer.getHouseholdDataManager().getPersonFromId(trip.getPerson()));
         siloPerson.updateWeeklyTravelSeconds((float) legTime_s);
         siloPerson.updateWeeklyMarginalMetHours(legMode, (float) legMarginalMetHours);
-        siloPerson.updateWeeklyPollutionExposuresByHour(Map.of(
+        ((PersonHealthMCR) siloPerson).updateWeeklyPollutionExposuresByHour(PersonHealthMCR.EXPOSURE_TRAVEL, Map.of(
                 "pm2.5", legExposurePm25ByHour,
                 "no2", legExposureNo2ByHour
         ));
@@ -1237,7 +1237,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
          */
 
         siloPerson.updateWeeklyMarginalMetHours(trip.getTripMode(), (float) pathMarginalMetHours);
-        siloPerson.updateWeeklyPollutionExposuresByHour(Map.of(
+        ((PersonHealthMCR) siloPerson).updateWeeklyPollutionExposuresByHour(PersonHealthMCR.EXPOSURE_TRAVEL, Map.of(
                 "pm2.5", pathExposurePm25ByHour,
                 "no2", pathExposureNo2ByHour
         ));
@@ -1421,7 +1421,8 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
 
         siloPerson.updateWeeklyActivityMinutes((float) activityDurationInMinutes);
         siloPerson.updateWeeklyTravelActivityHourOccupied(hourOccupied);
-        siloPerson.updateWeeklyPollutionExposuresByHour(Map.of(
+        ((PersonHealthMCR) siloPerson).updateWeeklyActivityHourOccupied(hourOccupied);
+        ((PersonHealthMCR) siloPerson).updateWeeklyPollutionExposuresByHour(PersonHealthMCR.EXPOSURE_ACTIVITY, Map.of(
                 "pm2.5", activityExposurePM25ByHour,
                 "no2", activityExposureNo2ByHour
         ));
@@ -1482,7 +1483,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
 
 
             ((PersonHealth) person).updateWeeklyHomeMinutes((float) minutesAtHome);
-            ((PersonHealth) person).updateWeeklyPollutionExposuresByHour(Map.of(
+            ((PersonHealthMCR) person).updateWeeklyPollutionExposuresByHour(PersonHealthMCR.EXPOSURE_HOME, Map.of(
                     "pm2.5", exposurePM25,
                     "no2", exposureNo2
             ));
@@ -1509,6 +1510,17 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
             float[] hourOccupiedByTransit = ((PersonHealth) person).getWeeklyHourOccupiedByTransit();
             float[] hourOccupiedByRail = ((PersonHealth) person).getWeeklyHourOccupiedByRail();
 
+            // decomposition of air pollution exposure by source (travel, activity, home)
+            PersonHealthMCR personMCR = (PersonHealthMCR) person;
+            float[] activityHourOccupied = personMCR.getWeeklyActivityHourOccupied();
+            List<String> sources = PersonHealthMCR.EXPOSURE_SOURCES;
+            List<String> pollutants = List.of("pm2.5", "no2");
+            // normalised with the same per-hour denominator as the total, so the sources sum up to the total
+            double[][] sumExposureBySourceNormalised = new double[sources.size()][pollutants.size()];
+            // exposure divided by ventilation rate and hours spent at the source -> average while at the source
+            double[][] sumExposureBySourceVentilationAdjusted = new double[sources.size()][pollutants.size()];
+            double[] sumHourBySource = new double[sources.size()];
+
             for (int weekHour = 0;  weekHour < hourOccupied.length; weekHour++) {
                 int dayHour = weekHour % 24;
 
@@ -1534,6 +1546,27 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                 if (actualHourForAirExposure > 0) {
                     sumExposurePM25_normalized += weeklyPollutionExposures.get("pm2.5")[weekHour]/actualHourForAirExposure/min_ventilation_rate;
                     sumExposureNo2_normalized += weeklyPollutionExposures.get("no2")[weekHour]/actualHourForAirExposure/min_ventilation_rate;
+                }
+
+                // hours by source in this hour, rail excluded from travel as for the total air exposure
+                double[] hourBySource = new double[sources.size()];
+                hourBySource[sources.indexOf(PersonHealthMCR.EXPOSURE_TRAVEL)] = hourOccupied[weekHour] - activityHourOccupied[weekHour] - hourOccupiedByRail[weekHour];
+                hourBySource[sources.indexOf(PersonHealthMCR.EXPOSURE_ACTIVITY)] = activityHourOccupied[weekHour];
+                hourBySource[sources.indexOf(PersonHealthMCR.EXPOSURE_HOME)] = Math.max(0., 1. - hourOccupied[weekHour]);
+
+                for (int s = 0; s < sources.size(); s++) {
+                    sumHourBySource[s] += hourBySource[s];
+                    Map<String, float[]> sourceExposures = personMCR.getWeeklyPollutionExposuresBySource(sources.get(s));
+                    for (int p = 0; p < pollutants.size(); p++) {
+                        float[] sourceExposure = sourceExposures.get(pollutants.get(p));
+                        if (sourceExposure == null) {
+                            continue;
+                        }
+                        if (actualHourForAirExposure > 0) {
+                            sumExposureBySourceNormalised[s][p] += sourceExposure[weekHour]/actualHourForAirExposure/min_ventilation_rate;
+                        }
+                        sumExposureBySourceVentilationAdjusted[s][p] += sourceExposure[weekHour]/min_ventilation_rate;
+                    }
                 }
 
                 if (actualHourForNoiseExposure > 0) {
@@ -1563,6 +1596,16 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                             "no2", (float) (sumExposureNo2_normalized / sumActualHourForAirExposure)
                     )
             );
+
+            for (int s = 0; s < sources.size(); s++) {
+                for (int p = 0; p < pollutants.size(); p++) {
+                    personMCR.setWeeklyExposureBySourceNormalised(sources.get(s), pollutants.get(p),
+                            (float) (sumExposureBySourceNormalised[s][p] / sumActualHourForAirExposure));
+                    // average is undefined if the person spent (almost) no time at this source, e.g. no travel
+                    float average = sumHourBySource[s] > 1e-3 ? (float) (sumExposureBySourceVentilationAdjusted[s][p] / sumHourBySource[s]) : Float.NaN;
+                    personMCR.setWeeklyExposureBySourceAverage(sources.get(s), pollutants.get(p), average);
+                }
+            }
 
             //
             float Lden = (float) (10 * Math.log10(sumExposureNoise / sumActualHourForNoiseExposure));
@@ -1867,7 +1910,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
 
 
                 ((PersonHealth) person).updateWeeklyHomeMinutes((float) minutesAtHome);
-                ((PersonHealth) person).updateWeeklyPollutionExposuresByHour(Map.of(
+                ((PersonHealthMCR) person).updateWeeklyPollutionExposuresByHour(PersonHealthMCR.EXPOSURE_HOME, Map.of(
                         "pm2.5", exposurePM25,
                         "no2", exposureNo2
                 ));
