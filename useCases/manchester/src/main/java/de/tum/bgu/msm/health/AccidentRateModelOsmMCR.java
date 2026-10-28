@@ -36,6 +36,7 @@ public class AccidentRateModelOsmMCR {
     private final Scenario scenario;
     private final float scaleFactor;
     private final Day day;
+    private final Random random;
     private final AccidentsContext accidentsContext = new AccidentsContext();
     private AnalysisEventHandlerMotorized motorizedHandler;
     private AnalysisEventHandlerNonMotorized nonMotorizedHandler;
@@ -59,11 +60,12 @@ public class AccidentRateModelOsmMCR {
     // TODO: adjust
     private static final double VEHICLE_SCALE_FACTOR = 10.0;
 
-    public AccidentRateModelOsmMCR(Properties properties, Scenario scenario, float scaleFactor, Day day) {
+    public AccidentRateModelOsmMCR(Properties properties, Scenario scenario, float scaleFactor, Day day, Random random) {
         this.properties = properties;
         this.scenario = scenario;
         this.scaleFactor = scaleFactor;
         this.day = day;
+        this.random = random;
     }
 
     public void runCasualtyRateMCR() {
@@ -272,7 +274,6 @@ public class AccidentRateModelOsmMCR {
 
     private void calculateCasualtyFrequency() {
         log.info("Link casualty frequency calculation (by type by time of day) start.");
-        Random random = new Random();
         double calibrationFactor = day == Day.thursday || day == Day.saturday || day == Day.sunday ? 2.19 : 2.19;
         String basePath = scenario.getScenarioElement("accidentModelFile").toString();
 

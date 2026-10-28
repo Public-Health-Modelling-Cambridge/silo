@@ -114,7 +114,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                     + properties.main.scenarioName + "/" + latestMITOYear + "/microData/trips.csv");
 
             // todo: extract subset for testing !!
-            //mitoTripsAll = TripSelector.selectRandomSubset(mitoTripsAll, 100);
+            //mitoTripsAll = TripSelector.selectRandomSubset(mitoTripsAll, 100, random);
 
             //
             // Readin full network

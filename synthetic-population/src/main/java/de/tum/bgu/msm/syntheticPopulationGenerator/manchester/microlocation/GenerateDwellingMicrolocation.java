@@ -111,17 +111,17 @@ public class GenerateDwellingMicrolocation {
 
 
     public List<Long> selectBuildings(List<Long> buildings, int n) {
-        Random random = new Random();
+        Random random = SiloUtil.getRandomObject();
         List<Long> selectedBuildings = new ArrayList<>();
 
         if (buildings.size() >= n) {
             // Select `n` unique buildings
-            Collections.shuffle(buildings); // Shuffle to get randomness
+            Collections.shuffle(buildings, random); // Shuffle to get randomness
             selectedBuildings = buildings.subList(0, n);
         } else {
             // Select all buildings in random order
             List<Long> shuffledBuildings = new ArrayList<>(buildings);
-            Collections.shuffle(shuffledBuildings);
+            Collections.shuffle(shuffledBuildings, random);
             selectedBuildings.addAll(shuffledBuildings);
 
             // Fill up with random duplicates

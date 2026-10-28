@@ -36,6 +36,7 @@ public class AccidentRateModelMCR {
     private static final Logger log = LogManager.getLogger( AccidentRateModelMCR.class );
     private Scenario scenario;
     private final float SCALEFACTOR;
+    private final Random random;
     private AccidentsContext accidentsContext = new AccidentsContext();
     private AnalysisEventHandler analysisEventHandler;
 
@@ -73,10 +74,11 @@ public class AccidentRateModelMCR {
             "path", "road"
     );
 
-    public AccidentRateModelMCR(Scenario scenario, float scalefactor, Day day) {
+    public AccidentRateModelMCR(Scenario scenario, float scalefactor, Day day, Random random) {
         this.scenario = scenario;
         SCALEFACTOR = scalefactor;
         this.day = day;
+        this.random = random;
     }
 
     public void runAgentInjuryRiskOfflineMCR() {
@@ -494,8 +496,6 @@ public class AccidentRateModelMCR {
         // eventsFileBikePed = "/media/admin/EXTERNAL_USB1/simulation_results_for_paper/base/matsim/2021/thursday/bikePed/2021.output_events.xml.gz";
         eventsReader.readFile(eventsFileBikePed); //car, bike, ped AADT are calculated by eventHandler
         log.info("Reading bike&ped events file... Done.");
-
-        Random random = new Random(); // todo: how to do ??
 
         double calibrationFactor=1.;
         switch (day){

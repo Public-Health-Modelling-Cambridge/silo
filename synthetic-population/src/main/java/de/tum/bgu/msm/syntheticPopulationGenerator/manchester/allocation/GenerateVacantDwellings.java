@@ -82,7 +82,7 @@ public class GenerateVacantDwellings {
             List<Dwelling> dwellingForCopy = occupiedDwellings.get(taz);
             int vacantCounter = 0;
             if (dwellingForCopy != null){
-                Collections.shuffle(dwellingForCopy);
+                Collections.shuffle(dwellingForCopy, SiloUtil.getRandomObject());
                 for (int draw = 0; draw < vacantDwellings; draw++){
                     int tazSelected = taz;
                     //++highestDwellingIdInUse pre-increment

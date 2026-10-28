@@ -101,13 +101,13 @@ public class AccidentModelMCR extends AbstractModel implements ModelUpdateListen
             //System.exit(0);
 
             // injury model (old version)
-            //AccidentRateModelMCR model = new AccidentRateModelMCR(scenario, 1.f / scalingFactor, day);
+            //AccidentRateModelMCR model = new AccidentRateModelMCR(scenario, 1.f / scalingFactor, day, random);
             //model.runCasualtyRateMCR(); // number of casualties per link (max 1 per link, otherwise 0)
             // model.computeLinkLevelInjuryRisk(); // R=1/v where v is the traffic volume
             // model.computePersonLevelInjuryRiskOffline();
 
             // osm-based injury model (new version)
-            AccidentRateModelOsmMCR model = new AccidentRateModelOsmMCR(properties, scenario, 1.f / scalingFactor, day);
+            AccidentRateModelOsmMCR model = new AccidentRateModelOsmMCR(properties, scenario, 1.f / scalingFactor, day, random);
             model.runCasualtyRateMCR();
 
             for (Id<Link> linkId : model.getAccidentsContext().getLinkId2info().keySet()) {
