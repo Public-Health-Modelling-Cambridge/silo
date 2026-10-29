@@ -250,10 +250,12 @@ public class CasualtyRateCalculationOsmMCR {
         utility += binaryLogitCoef.get("width") * link.width;
 
         // Handle categorical variables (speed limit)
+        // A missing speed limit (NaN) falls in the reference category (>= 30 MPH): no speed terms are added
         double speedLimit = link.speedLimitMPH;
-        if (speedLimit < 20) {
+        boolean speedLimitKnown = !Double.isNaN(speedLimit);
+        if (speedLimitKnown && speedLimit < 20) {
             utility += binaryLogitCoef.get("speed_limit<20 MPH");
-        } else if (speedLimit >= 20 && speedLimit < 30) {
+        } else if (speedLimitKnown && speedLimit >= 20 && speedLimit < 30) {
             utility += binaryLogitCoef.get("speed_limit20 - 29 MPH");
         }
 
@@ -262,7 +264,7 @@ public class CasualtyRateCalculationOsmMCR {
 
         if (roadType.equals("primary") || roadType.equals("primary_link") || roadType.equals("trunk") || roadType.equals("trunk_link")) {
             utility += binaryLogitCoef.get("roadPrimary/Trunk");
-        } else if ((!roadType.equals("motorway")) && (!roadType.equals("motorway_link"))) {
+        } else if (speedLimitKnown && (!roadType.equals("motorway")) && (!roadType.equals("motorway_link"))) {
             if (speedLimit < 20) {
                 utility += binaryLogitCoef.get("road<20MPH");
             } else if (speedLimit >= 20 && speedLimit < 30) {

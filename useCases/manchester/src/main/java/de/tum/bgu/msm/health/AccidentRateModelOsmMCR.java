@@ -44,6 +44,8 @@ public class AccidentRateModelOsmMCR {
     private int counterBikePed;
     private List<OsmLink> osmLinks;
     private Properties properties;
+    private final String networkFile;
+    private final Set<Id<Link>> expectedLinkIds;
 
     private static final Set<AccidentType> ACCIDENT_TYPES_EXCLUDED = Set.of(AccidentType.CAR, AccidentType.BIKECAR, AccidentType.BIKEBIKE);
     private static final Set<AccidentSeverity> ACCIDENT_SEVERITIES_EXCLUDED = Set.of(AccidentSeverity.LIGHT);
@@ -60,12 +62,19 @@ public class AccidentRateModelOsmMCR {
     // TODO: adjust
     private static final double VEHICLE_SCALE_FACTOR = 10.0;
 
-    public AccidentRateModelOsmMCR(Properties properties, Scenario scenario, float scaleFactor, Day day, Random random) {
+    /**
+     * @param networkFile     network to compute link risks on; must be the network used for linkInfoByDay and the MATSim runs
+     * @param expectedLinkIds link IDs the risks are written to (linkInfoByDay keys); the network must contain exactly these links
+     */
+    public AccidentRateModelOsmMCR(Properties properties, Scenario scenario, float scaleFactor, Day day, Random random,
+                                   String networkFile, Set<Id<Link>> expectedLinkIds) {
         this.properties = properties;
         this.scenario = scenario;
         this.scaleFactor = scaleFactor;
         this.day = day;
         this.random = random;
+        this.networkFile = Objects.requireNonNull(networkFile, "networkFile");
+        this.expectedLinkIds = Objects.requireNonNull(expectedLinkIds, "expectedLinkIds");
     }
 
     public void runCasualtyRateMCR() {
@@ -89,10 +98,10 @@ public class AccidentRateModelOsmMCR {
         }
 
          */
-        // TODO: generalize for other networks
-        String networkFile = properties.main.baseDirectory + "input/mito/trafficAssignment/" + "network_" + properties.main.scenarioName + ".xml";
+        log.info("Reading network file {}", networkFile);
         new MatsimNetworkReader(scenario.getNetwork()).readFile(networkFile);
         log.info("Reading network file... Done.");
+        checkLinkIdsMatch();
 
         // Set accidentContext
         // links
@@ -138,6 +147,23 @@ public class AccidentRateModelOsmMCR {
         motorizedHandler.reset(0);
         nonMotorizedHandler.reset(0);
         System.gc();
+    }
+
+    // Link risks are looked up by link ID in linkInfoByDay; any difference between the two ID sets
+    // would either crash the copy step or silently leave links with zero risk
+    private void checkLinkIdsMatch() {
+        Set<Id<Link>> networkLinkIds = scenario.getNetwork().getLinks().keySet();
+        List<Id<Link>> onlyInNetwork = networkLinkIds.stream().filter(id -> !expectedLinkIds.contains(id)).collect(Collectors.toList());
+        List<Id<Link>> onlyInLinkInfo = expectedLinkIds.stream().filter(id -> !networkLinkIds.contains(id)).collect(Collectors.toList());
+        if (!onlyInNetwork.isEmpty() || !onlyInLinkInfo.isEmpty()) {
+            throw new IllegalStateException(String.format(
+                    "Accident model network %s does not match linkInfoByDay(%s): %d links only in the network (e.g. %s), " +
+                            "%d links only in linkInfoByDay (e.g. %s).",
+                    networkFile, day,
+                    onlyInNetwork.size(), onlyInNetwork.stream().limit(5).collect(Collectors.toList()),
+                    onlyInLinkInfo.size(), onlyInLinkInfo.stream().limit(5).collect(Collectors.toList())));
+        }
+        log.info("Accident model network matches linkInfoByDay: {} links.", networkLinkIds.size());
     }
 
     private void readVehicles(Vehicles vehiclesMotorized, Vehicles vehiclesNonMotorized) {
@@ -194,11 +220,27 @@ public class AccidentRateModelOsmMCR {
 
     private void initializeOsmLinks() {
         log.info("Aggregating network by OSM ID...");
-        Map<Integer, Set<Link>> linksByOsmId = scenario.getNetwork().getLinks().values().stream()
-                .collect(Collectors.groupingBy(
-                        link -> getOsmId(link),
-                        Collectors.toSet()
-                ));
+        Map<Integer, Set<Link>> linksByOsmId = new HashMap<>();
+        List<Link> linksWithoutOsmId = new ArrayList<>();
+        for (Link link : scenario.getNetwork().getLinks().values()) {
+            int osmId = getOsmId(link);
+            if (osmId > 0) {
+                linksByOsmId.computeIfAbsent(osmId, k -> new HashSet<>()).add(link);
+            } else {
+                linksWithoutOsmId.add(link);
+            }
+        }
+
+        // Links without a valid OSM ID (e.g. motorway vehicle connectors) are not one street:
+        // keep each as its own OsmLink with a synthetic negative ID, assigned in link ID order
+        linksWithoutOsmId.sort(Comparator.comparing(link -> link.getId().toString()));
+        int syntheticId = -1;
+        for (Link link : linksWithoutOsmId) {
+            linksByOsmId.put(syntheticId--, new HashSet<>(Set.of(link)));
+        }
+        if (!linksWithoutOsmId.isEmpty()) {
+            log.warn("{} links have no valid OSM ID and are treated as individual OsmLinks with negative IDs.", linksWithoutOsmId.size());
+        }
 
         osmLinks = linksByOsmId.entrySet().stream()
                 .map(entry -> {
@@ -210,6 +252,16 @@ public class AccidentRateModelOsmMCR {
                 })
                 .collect(Collectors.toList());
         log.info("Network aggregated. {} OsmLinks created.", osmLinks.size());
+
+        long mixed = osmLinks.stream().filter(osmLink -> osmLink.mixedAttributes).count();
+        if (mixed > 0) {
+            log.warn("{} OsmLinks have member links with different road type, speed limit or one-way status; " +
+                    "the length-weighted mode is used.", mixed);
+        }
+        long missingSpeed = osmLinks.stream().filter(osmLink -> Double.isNaN(osmLink.speedLimitMPH)).count();
+        if (missingSpeed > 0) {
+            log.warn("{} OsmLinks have no speed limit; the reference speed category is used.", missingSpeed);
+        }
     }
 
     private void initializeLinkInfo(OsmLink osmLink) {

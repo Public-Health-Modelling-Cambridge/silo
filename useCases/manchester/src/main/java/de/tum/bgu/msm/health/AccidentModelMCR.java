@@ -29,9 +29,11 @@ public class AccidentModelMCR extends AbstractModel implements ModelUpdateListen
     private int latestMatsimYear = -1;
     private static final Logger logger = LogManager.getLogger(AccidentModelMCR.class);
     private List<Day> simulatedDays;
+    private final Config matsimConfig;
 
-    public AccidentModelMCR(DataContainer dataContainer, Properties properties, Random random) {
+    public AccidentModelMCR(DataContainer dataContainer, Properties properties, Random random, Config matsimConfig) {
         super(dataContainer, properties, random);
+        this.matsimConfig = Objects.requireNonNull(matsimConfig, "MATSim config is required: the accident model reads the same network as linkInfoByDay");
         //simulatedDays = Arrays.asList(Day.sunday);
         simulatedDays = Arrays.asList(Day.sunday, Day.saturday, Day.thursday);
     }
@@ -107,13 +109,24 @@ public class AccidentModelMCR extends AbstractModel implements ModelUpdateListen
             // model.computePersonLevelInjuryRiskOffline();
 
             // osm-based injury model (new version)
-            AccidentRateModelOsmMCR model = new AccidentRateModelOsmMCR(properties, scenario, 1.f / scalingFactor, day, random);
+            // Use the same network as linkInfoByDay (DataBuilderHealth) and the exposure model
+            Map<Id<Link>, LinkInfo> dayLinkInfo = ((HealthDataContainerImpl) dataContainer).getLinkInfoByDay(day);
+            if (dayLinkInfo == null) {
+                throw new IllegalStateException("No linkInfoByDay initialised for day " + day);
+            }
+            AccidentRateModelOsmMCR model = new AccidentRateModelOsmMCR(properties, scenario, 1.f / scalingFactor, day, random,
+                    matsimConfig.network().getInputFile(), dayLinkInfo.keySet());
             model.runCasualtyRateMCR();
 
             for (Id<Link> linkId : model.getAccidentsContext().getLinkId2info().keySet()) {
                 //((de.tum.bgu.msm.scenarios.health.HealthDataContainerImpl)dataContainer).getLinkInfoByDay().get(day).get(linkId).setLightCasualityExposureByAccidentTypeByTime(model.getAccidentsContext().getLinkId2info().get(linkId).getLightCasualityExposureByAccidentTypeByTime());
                 //((DataContainerHealth) dataContainer).getLinkInfo().get(linkId).setSevereFatalCasualityExposureByAccidentTypeByTime(model.getAccidentsContext().getLinkId2info().get(linkId).getSevereFatalCasualityExposureByAccidentTypeByTime());
-                ((HealthDataContainerImpl) dataContainer).getLinkInfoByDay(day).get(linkId).setSevereFatalCasualityExposureByAccidentTypeByTime(model.getAccidentsContext().getLinkId2info().get(linkId).getSevereFatalCasualityExposureByAccidentTypeByTime());
+                LinkInfo linkInfo = dayLinkInfo.get(linkId);
+                if (linkInfo == null) {
+                    throw new IllegalStateException("Accident model produced a risk for link " + linkId +
+                            " which is not in linkInfoByDay(" + day + "): the accident and health networks differ.");
+                }
+                linkInfo.setSevereFatalCasualityExposureByAccidentTypeByTime(model.getAccidentsContext().getLinkId2info().get(linkId).getSevereFatalCasualityExposureByAccidentTypeByTime());
             }
 
             logger.info("====================");
