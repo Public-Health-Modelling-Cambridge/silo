@@ -81,6 +81,12 @@ public class AccidentModelMCR extends AbstractModel implements ModelUpdateListen
     public void endSimulation() {
     }
 
+    // Runs the accident model for the given MATSim year regardless of the endYear() trigger conditions (offline runs)
+    public void runForYear(int year) {
+        latestMatsimYear = year;
+        runAccidentRateModel(year);
+    }
+
     private void runAccidentRateModel(int year) {
         //generate link injury risks for each simulated day
         for (Day day : simulatedDays) {

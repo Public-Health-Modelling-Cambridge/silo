@@ -54,21 +54,22 @@ public class RunExposureHealthOffline {
 
         // setup
         AccidentModelMCR accidentModel = new AccidentModelMCR(dataContainer, properties, SiloUtil.provideNewRandom(), config);
-        HealthExposureModelMCR exposureModelMCR = new HealthExposureModelMCR(dataContainer, properties, SiloUtil.provideNewRandom(),config);
-        SportPAModelMCR sportPAModelMCR = new SportPAModelMCR(dataContainer, properties, SiloUtil.provideNewRandom());
-        DiseaseModelMCR diseaseModelMCR = new DiseaseModelMCR(dataContainer, properties, SiloUtil.provideNewRandom());
+        //HealthExposureModelMCR exposureModelMCR = new HealthExposureModelMCR(dataContainer, properties, SiloUtil.provideNewRandom(),config);
+        //SportPAModelMCR sportPAModelMCR = new SportPAModelMCR(dataContainer, properties, SiloUtil.provideNewRandom());
+        //DiseaseModelMCR diseaseModelMCR = new DiseaseModelMCR(dataContainer, properties, SiloUtil.provideNewRandom());
 
         // disease model only
         // exposureModelMCR.setup();
 
-        // runs
-        accidentModel.endYear(2021);
+        // runs: accident model only
+        // endYear(2021) skips the accident model when a base exposure file is set, so run it directly
+        accidentModel.runForYear(2021);
         //exposureModelMCR.setup(); // read-in the exposure file
-        exposureModelMCR.endYear(2021);
-        sportPAModelMCR.endYear(2021);
-        diseaseModelMCR.setup();
-        diseaseModelMCR.endYear(2021);
-        dataContainer.endSimulation();
+        //exposureModelMCR.endYear(2021);
+        //sportPAModelMCR.endYear(2021);
+        //diseaseModelMCR.setup();
+        //diseaseModelMCR.endYear(2021);
+        //dataContainer.endSimulation();
 
         logger.info("Finished SILO.");
     }
