@@ -63,9 +63,10 @@ public class RunExposureHealthOffline {
 
         // runs
         accidentModel.endYear(2021);
+        // sport PA before exposure: activity exposure uses the person's sport mMET-hours for the ventilation rate
+        sportPAModelMCR.endYear(2021);
         //exposureModelMCR.setup(); // read-in the exposure file
         exposureModelMCR.endYear(2021);
-        sportPAModelMCR.endYear(2021);
         diseaseModelMCR.setup();
         diseaseModelMCR.endYear(2021);
         dataContainer.endSimulation();
