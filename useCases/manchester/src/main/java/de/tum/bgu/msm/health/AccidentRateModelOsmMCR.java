@@ -59,10 +59,8 @@ public class AccidentRateModelOsmMCR {
             "path", "road"
     );
 
-    // TODO: adjust
-    private static final double VEHICLE_SCALE_FACTOR = 10.0;
-
     /**
+     * @param scaleFactor     expansion factor for MATSim car and truck flows, i.e. 1 / (scale.factor x matsim.scale.factor)
      * @param networkFile     network to compute link risks on; must be the network used for linkInfoByDay and the MATSim runs
      * @param expectedLinkIds link IDs the risks are written to (linkInfoByDay keys); the network must contain exactly these links
      */
@@ -303,8 +301,8 @@ public class AccidentRateModelOsmMCR {
 
         for (Link link : links) {
             for (int hour = 0; hour < 24; hour++) {
-                double carDemand = motorizedHandler.getDemand(link.getId(), "car", hour) * VEHICLE_SCALE_FACTOR;
-                double truckDemand = motorizedHandler.getDemand(link.getId(), "truck", hour) * VEHICLE_SCALE_FACTOR;
+                double carDemand = motorizedHandler.getDemand(link.getId(), "car", hour) * scaleFactor;
+                double truckDemand = motorizedHandler.getDemand(link.getId(), "truck", hour) * scaleFactor;
                 double pedDemand = nonMotorizedHandler.getDemand(link.getId(), "walk", hour);
                 double bikeDemand = nonMotorizedHandler.getDemand(link.getId(), "bike", hour);
 
@@ -413,10 +411,10 @@ public class AccidentRateModelOsmMCR {
         double demand;
         switch (mode) {
             case "car":
-                demand = motorizedHandler.getDemand(link.getId(), "car", hour) * VEHICLE_SCALE_FACTOR;
+                demand = motorizedHandler.getDemand(link.getId(), "car", hour) * scaleFactor;
                 break;
             case "truck":
-                demand = motorizedHandler.getDemand(link.getId(), "truck", hour) * VEHICLE_SCALE_FACTOR;
+                demand = motorizedHandler.getDemand(link.getId(), "truck", hour) * scaleFactor;
                 break;
             case "walk":
                 demand = nonMotorizedHandler.getDemand(link.getId(), "walk", hour);

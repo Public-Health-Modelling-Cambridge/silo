@@ -102,8 +102,21 @@ public class AccidentModelMCR extends AbstractModel implements ModelUpdateListen
             final MutableScenario scenario = ScenarioUtils.createMutableScenario(config);
             scenario.getConfig().travelTimeCalculator().setTraveltimeBinSize(3600);
 
-            // float scalingFactor = (float) (properties.main.scaleFactor * properties.transportModel.matsimScaleFactor);
-            float scalingFactor = 0.1f; // todo: temporary fix
+            // Car/truck sample of the simulated MATSim population. MATSim capacity is set from
+            // matsim.scale.factor.car (MatsimTransportModelMCRHealth.finalizeCarTruckConfig), so both must agree.
+            double matsimScaleFactor = properties.transportModel.matsimScaleFactor;
+            double matsimScaleFactorCar = properties.healthData.matsim_scale_factor_car;
+            if (Math.abs(matsimScaleFactor - matsimScaleFactorCar) > 1e-9) {
+                throw new IllegalStateException("matsim.scale.factor (" + matsimScaleFactor
+                        + ") differs from matsim.scale.factor.car (" + matsimScaleFactorCar
+                        + "); set both to the car/truck sample of the MATSim run");
+            }
+            double carTruckSample = properties.main.scaleFactor * matsimScaleFactor;
+            if (!(carTruckSample > 0. && carTruckSample <= 1.)) {
+                throw new IllegalStateException("Invalid car/truck sample (scale.factor x matsim.scale.factor): " + carTruckSample);
+            }
+            float vehicleScaleFactor = (float) (1. / carTruckSample);
+            logger.info("Accident model: car/truck sample " + carTruckSample + ", flows expanded by " + vehicleScaleFactor);
             scenario.addScenarioElement("accidentModelFile", properties.main.baseDirectory + "input/accident/");
             //System.out.println(scenario.getScenarioElement("accidentModelFile").toString());
             //System.exit(0);
@@ -120,7 +133,7 @@ public class AccidentModelMCR extends AbstractModel implements ModelUpdateListen
             if (dayLinkInfo == null) {
                 throw new IllegalStateException("No linkInfoByDay initialised for day " + day);
             }
-            AccidentRateModelOsmMCR model = new AccidentRateModelOsmMCR(properties, scenario, 1.f / scalingFactor, day, random,
+            AccidentRateModelOsmMCR model = new AccidentRateModelOsmMCR(properties, scenario, vehicleScaleFactor, day, random,
                     matsimConfig.network().getInputFile(), dayLinkInfo.keySet());
             model.runCasualtyRateMCR();
 
