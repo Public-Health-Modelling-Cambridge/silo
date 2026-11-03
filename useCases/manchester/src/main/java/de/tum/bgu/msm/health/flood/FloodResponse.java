@@ -10,24 +10,24 @@ package de.tum.bgu.msm.health.flood;
  * (Defra/EA FD2320 hazard rating {@code HR = d(v + 0.5) + DF}; Cox et al. 2010;
  * Martinez-Gomariz et al. 2016), not vehicle wading depth.
  * <p>
- * <b>The coefficients below are placeholders and must be replaced with calibrated values before
- * any published result.</b> They are shaped correctly — monotone, bounded, zero effect when dry
- * — but the specific numbers are not taken from a fitted study. Two caveats to resolve first:
+ * The walking values are anchored on published stability limits and wading-speed experiments
+ * (see {@link #forWalk()}); the cycling values are a geometric argument, because no published
+ * depth-speed function for cycling through floodwater is known (see {@link #forBike()}). Both
+ * are first estimates, to be revisited against the final runs. Caveats:
  * <ul>
  *   <li>The hazard criterion is depth <i>and velocity</i>. The exported depth series carries
  *       depth only, so the thresholds here are depth-only proxies. If the hydraulic model can
  *       also export velocity, extend {@link WaterDepthData} and use the full HR formula.</li>
- *   <li>Evidence for <i>cycling</i> in floodwater is much thinner than for walking. Treating
- *       bikes with a pedestrian-derived curve is an assumption that has to be stated, not
- *       hidden.</li>
+ *   <li>Evidence for <i>cycling</i> in floodwater is much thinner than for walking. The bike
+ *       values are an assumption that has to be stated, not hidden.</li>
+ *   <li>One threshold per mode for everyone. Children and older adults lose stability at lower
+ *       depths (Cox et al. 2010); an age-dependent threshold would need the person in
+ *       {@link FloodAwareActiveTravelTime}, which it already receives.</li>
  * </ul>
  */
 public final class FloodResponse {
 
-    /**
-     * Depth below which the flood is ignored, in metres. Matches DEPTH_SHALLOW in the notebook,
-     * so the two pipelines agree on what counts as wet.
-     */
+    /** Depth below which the flood is ignored, in metres. */
     private final double negligibleDepth;
 
     /** Depth at or above which the link is impassable on foot or by bike, in metres. */
@@ -50,23 +50,41 @@ public final class FloodResponse {
     }
 
     /**
-     * Walking. Impassability at 0.3 m follows the notebook's DEPTH_MODERATE; adult pedestrian
-     * instability in the experimental literature sets in around knee depth, earlier for
-     * children and older adults. The 0.25 floor means a pedestrian in 0.3 m of water moves at a
-     * quarter of dry-weather speed.
+     * Walking: no effect below 0.10 m, impassable from 0.50 m, half the dry speed just below it.
+     * <ul>
+     *   <li>0.10 m: the shallow class of Defra/EA FD2320, below which water is treated as
+     *       passable (same as DEPTH_SHALLOW in the notebook).</li>
+     *   <li>0.50 m: in slow-moving urban surface water (velocity near 0), FD2320's hazard rating
+     *       reaches "danger for some" at about this depth, and it is the stability limit for
+     *       children in Cox et al. (2010). Adults stay stable in deeper still water, but walking
+     *       through water above the knee is not a route anyone chooses.</li>
+     *   <li>0.50 speed factor: wading experiments (Bernardini et al. 2017) show walking speed
+     *       falling roughly linearly with depth, to about half the dry speed near knee to thigh
+     *       depth.</li>
+     * </ul>
+     * References not machine-verified; check the exact figures against the papers before
+     * publication.
      */
     public static FloodResponse forWalk() {
-        return new FloodResponse(0.10, 0.30, 0.25);
+        return new FloodResponse(0.10, 0.50, 0.50);
     }
 
     /**
-     * Cycling. Assumed impassable at the same depth as walking — a cyclist reaching standing
-     * water dismounts and becomes a pedestrian — with a steeper speed penalty, since riding
-     * through even shallow water is slower relative to dry cycling speed than wading is
-     * relative to walking.
+     * Cycling: no effect below 0.05 m, impassable from 0.30 m, a fifth of the dry speed just
+     * below it. Geometric, not empirical:
+     * <ul>
+     *   <li>0.05 m: wheel drag and spray slow a rider from a few centimetres; with a 170 mm crank
+     *       and a bottom bracket about 0.27 m high, the pedal at the bottom of the stroke enters
+     *       the water at about 0.10 m.</li>
+     *   <li>0.30 m: the bottom bracket is under water and the rider has to dismount. Pushing a
+     *       bike through water is then treated as impassable for the bike mode; mode choice can
+     *       still move the trip to walking.</li>
+     *   <li>0.20 speed factor: about 1.1 m/s, the speed of pushing a bike while wading, against
+     *       a dry cycling speed of 5.5 m/s.</li>
+     * </ul>
      */
     public static FloodResponse forBike() {
-        return new FloodResponse(0.10, 0.30, 0.10);
+        return new FloodResponse(0.05, 0.30, 0.20);
     }
 
     /** True when the link cannot be used at this depth. */

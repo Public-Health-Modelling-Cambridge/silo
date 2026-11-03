@@ -165,10 +165,13 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
     private final int lastIterationDisrupted;
 
     // Extra avoidance of flooded links by walk and bike, beyond their slowness: the routing
-    // cost is multiplied by (1 + weight * depthFraction). 0 lets the flood act through travel
-    // time alone — the conservative setting until the term is calibrated against evidence on
-    // how far pedestrians actually detour around standing water.
-    private static final double FLOOD_HAZARD_WEIGHT = 0.;
+    // cost is multiplied by (1 + weight * depthFraction), depthFraction running from 0 at the
+    // negligible depth to 1 at the impassable one (FloodResponse). At 1, a link just short of
+    // impassable costs twice its (already slowed) travel time. No study estimates this weight
+    // directly; observed and surveyed pedestrians avoid standing water well before it limits
+    // their speed, which argues for a value above 0. 1 is a moderate first estimate; test 0
+    // and 3 as sensitivities.
+    private static final double FLOOD_HAZARD_WEIGHT = 1.;
 
     // Stage 2 writes its own <runId>.scorestats.csv / modestats.csv into the shared output
     // directory, so stage 1's are copied aside as "<runId>.base_*" to keep the 0-100 history.
@@ -627,12 +630,15 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
                         + lastIterationBase + ", undisrupted network) for " + day + " all-modes scenario " + year
                         + ". Stage 2 is switched off; any existing output in " + outputDirectory + " is replaced.");
                 controler = runAllModesStage(year, day, STAGE_BASE, population, null);
+                writeBaseRunSettings(outputDirectory, year, day);
             } else {
                 if (!new File(basePlansFile).exists()) {
                     logger.warn("Running MATSim stage 1 (iterations " + FIRST_ITERATION_BASE + "-" + lastIterationBase
                             + ", undisrupted network) for " + day + " all-modes scenario " + year + ".");
                     runAllModesStage(year, day, STAGE_BASE, population, null);
+                    writeBaseRunSettings(outputDirectory, year, day);
                 } else {
+                    checkBaseRunSettings(outputDirectory, year, day);
                     logger.warn("Base run found (" + basePlansFile + ") — skipping iterations "
                             + FIRST_ITERATION_BASE + "-" + lastIterationBase + " and warm-starting stage 2 from it.");
                 }
@@ -841,6 +847,84 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
     }
 
     /**
+     * Record of the settings a stage-1 base run was made with, written next to its plans (stage 2
+     * never writes into that iteration folder). A base run is only reused for stage 2 when this
+     * record matches the current settings, so the flooded stage never warm-starts from plans that
+     * settled under other mode constants, weather or capacity.
+     */
+    private String baseRunSettingsFile(String outputDirectory, int year) {
+        return outputDirectory + "ITERS/it." + lastIterationBase + "/" + year + ".base_settings.txt";
+    }
+
+    /** The settings that make a base run reusable, one sorted {@code key=value} line each. */
+    private Map<String, String> currentBaseRunSettings(Day day) {
+        Map<String, String> settings = new TreeMap<>();
+        getModeConstants().forEach((group, byMode) -> byMode.forEach((mode, value) ->
+                settings.put("constant." + group + "." + mode, String.valueOf(value))));
+        WeatherModeShifts.forDay(day).forEach((mode, value) ->
+                settings.put("weather." + mode, String.valueOf(value)));
+        settings.put("iterations.base", String.valueOf(lastIterationBase));
+        settings.put("flowCapFactor", String.valueOf(properties.main.scaleFactor * properties.transportModel.matsimScaleFactor));
+        return settings;
+    }
+
+    private static String formatSettings(Map<String, String> settings) {
+        StringBuilder text = new StringBuilder();
+        settings.forEach((key, value) -> text.append(key).append('=').append(value).append('\n'));
+        return text.toString();
+    }
+
+    private void writeBaseRunSettings(String outputDirectory, int year, Day day) {
+        Path file = Path.of(baseRunSettingsFile(outputDirectory, year));
+        try {
+            Files.writeString(file, formatSettings(currentBaseRunSettings(day)));
+            logger.info("Base run settings recorded in " + file + ".");
+        } catch (IOException e) {
+            throw new RuntimeException("Could not write base run settings " + file, e);
+        }
+    }
+
+    /**
+     * Fails when the base run on disk was made with other settings than the current ones, or
+     * carries no record (made before the record existed). The message prints the current
+     * record: if the base run is known to match, saving it as the record file allows reuse.
+     */
+    private void checkBaseRunSettings(String outputDirectory, int year, Day day) {
+        Path file = Path.of(baseRunSettingsFile(outputDirectory, year));
+        Map<String, String> current = currentBaseRunSettings(day);
+        String fix = " Delete " + outputDirectory + " to rerun stage 1. If the base run is known to match"
+                + " the current settings, save the following as " + file + " instead:\n" + formatSettings(current);
+        if (!Files.exists(file)) {
+            throw new RuntimeException("The base run in " + outputDirectory + " has no settings record, so it"
+                    + " cannot be checked against the current mode constants, weather and capacity." + fix);
+        }
+        Map<String, String> recorded = new TreeMap<>();
+        try {
+            for (String line : Files.readAllLines(file)) {
+                int split = line.indexOf('=');
+                if (split > 0) {
+                    recorded.put(line.substring(0, split).trim(), line.substring(split + 1).trim());
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Could not read base run settings " + file, e);
+        }
+        Set<String> keys = new TreeSet<>(current.keySet());
+        keys.addAll(recorded.keySet());
+        List<String> differences = new ArrayList<>();
+        for (String key : keys) {
+            if (!Objects.equals(current.get(key), recorded.get(key))) {
+                differences.add(key + ": base run " + recorded.get(key) + ", now " + current.get(key));
+            }
+        }
+        if (!differences.isEmpty()) {
+            throw new RuntimeException("The base run in " + outputDirectory + " was made with other settings:\n  "
+                    + String.join("\n  ", differences) + "\n" + fix);
+        }
+        logger.warn("Base run settings match the current ones (" + file + ").");
+    }
+
+    /**
      * Copies the stage-1 statistics to {@code <runId>.base_<name>} so stage 2, which writes its
      * own into the same directory, cannot clobber them. Runs whether stage 1 was just executed
      * or reused, and never overwrites an existing copy — after a stage-2 run the originals hold
@@ -939,6 +1023,20 @@ public final class MatsimTransportModelMCRHealth implements TransportModel {
         config.replanning().setFractionOfIterationsToDisableInnovation(0.8);
         config.controller().setWritePlansInterval(Math.max(config.controller().getLastIteration(), 1));
         config.controller().setWriteEventsInterval(Math.max(config.controller().getLastIteration(), 1));
+
+        // Trips/legs CSVs: MATSim writes them at firstIteration + 1, at the last iteration and at
+        // multiples of the interval; mode shares of every iteration stay in modestats.csv.
+        //   stage 1: interval = last base iteration  -> it.0, it.1, it.100 (base for comparison)
+        //   stage 2: interval = first disrupted one  -> it.101 (pure shock: base plans on the
+        //            flooded network, no replanning yet), it.102 (first response), it.200
+        // Events of it.101 are kept too (writeEventsUntilIteration), so the shock can be
+        // analysed at link level.
+        if (stage == STAGE_BASE) {
+            config.controller().setWriteTripsInterval(Math.max(lastIterationBase, 1));
+        } else {
+            config.controller().setWriteTripsInterval(firstIterationDisrupted);
+            config.controller().setWriteEventsUntilIteration(firstIterationDisrupted);
+        }
 
         // Modes: only car/truck are QSim main modes (pt vehicles are driven by the transit
         // engine). bike and car_passenger are network routing modes WITHOUT being main modes —

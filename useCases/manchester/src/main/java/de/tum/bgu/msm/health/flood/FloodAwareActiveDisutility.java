@@ -41,8 +41,8 @@ public final class FloodAwareActiveDisutility implements TravelDisutility {
      * <p>
      * Deliberately large but <b>finite</b>, rather than {@code NaN} or infinity. Excluding the
      * link outright would be correct wherever an alternative exists, but leaves an agent whose
-     * origin or destination sits on a flooded link with no route at all — and with roughly
-     * 4,200 impassable links in a dense urban network, some activity locations do. A finite
+     * origin or destination sits on a flooded link with no route at all — and with thousands of
+     * impassable links in a dense urban network, some activity locations do. A finite
      * penalty degrades gracefully: alternatives always win by orders of magnitude, so nobody
      * crosses voluntarily, but a stranded agent can still reach its activity.
      */
