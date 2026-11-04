@@ -12,6 +12,7 @@ import java.util.stream.Stream;
  * Compares the outputs of two runs of RunExposureHealthOffline (e.g. before and after a fix):
  * - person exposure file (pp_exposure_*.csv): per column how many persons changed, mean before/after, largest change,
  *   and the persons with the largest change in normalised PM2.5 and NO2
+ * - distribution of the normalised exposures by age group: mean, p10, p50, p90 before/after
  * - trip files (healthIndicators_*.csv): per column how many trips changed
  * - checks on the new run: persons below background concentration, decomposition by source not adding up to the total
  *
@@ -23,6 +24,9 @@ public class CompareExposureRuns {
     private static final int TOP_CHANGES = 10;
     private static final String[] POLLUTANTS = {"pm25", "no2"};
     private static final String[] SOURCES = {"travel", "activity", "home"};
+    private static final String[] EXPOSURES = {"pm25", "no2", "noise_Lden", "ndvi"};
+    // lower bounds of the age groups
+    private static final int[] AGE_GROUPS = {0, 18, 30, 45, 65, 75};
 
     private final Path baselineDir;
     private final Path newDir;
@@ -65,6 +69,7 @@ public class CompareExposureRuns {
             compareTables(baseline, current);
             checkNewRun(current);
             reportLargestChanges(baseline, current);
+            reportByAgeGroup(baseline, current);
         }
 
         report.append("\n== Trips (healthIndicators_*.csv) ==\n");
@@ -188,6 +193,69 @@ public class CompareExposureRuns {
             }
             if (changes.isEmpty()) report.append("   none\n");
         }
+    }
+
+    private void reportByAgeGroup(Table baseline, Table current) {
+        if (!current.columns.contains("age")) return;
+        for (String exposure : EXPOSURES) {
+            String column = "exposure_normalised_" + exposure;
+            if (!baseline.columns.contains(column) || !current.columns.contains(column)) continue;
+            List<List<Double>> before = new ArrayList<>();
+            List<List<Double>> after = new ArrayList<>();
+            int[] changed = new int[AGE_GROUPS.length];
+            for (int i = 0; i < AGE_GROUPS.length; i++) {
+                before.add(new ArrayList<>());
+                after.add(new ArrayList<>());
+            }
+            for (String id : current.rows.keySet()) {
+                if (!baseline.rows.containsKey(id)) continue;
+                Double age = parse(current.get(id, "age"));
+                Double x = parse(baseline.get(id, column));
+                Double y = parse(current.get(id, column));
+                if (age == null || x == null || y == null) continue;
+                int group = ageGroup(age.intValue());
+                before.get(group).add(x);
+                after.get(group).add(y);
+                if (Math.abs(x - y) > TOLERANCE * Math.max(1, Math.abs(x))) changed[group]++;
+            }
+            report.append(String.format("%n   %s by age group (baseline -> new):%n   %-7s %8s %8s %19s %19s %19s %19s%n",
+                    column, "age", "persons", "changed", "mean", "p10", "p50", "p90"));
+            for (int i = 0; i < AGE_GROUPS.length; i++) {
+                List<Double> x = before.get(i);
+                List<Double> y = after.get(i);
+                if (x.isEmpty()) continue;
+                Collections.sort(x);
+                Collections.sort(y);
+                report.append(String.format("   %-7s %8d %8d %19s %19s %19s %19s%n", ageGroupLabel(i), x.size(), changed[i],
+                        pair(mean(x), mean(y)), pair(quantile(x, 0.1), quantile(y, 0.1)),
+                        pair(quantile(x, 0.5), quantile(y, 0.5)), pair(quantile(x, 0.9), quantile(y, 0.9))));
+            }
+        }
+    }
+
+    private static int ageGroup(int age) {
+        int group = 0;
+        while (group + 1 < AGE_GROUPS.length && age >= AGE_GROUPS[group + 1]) group++;
+        return group;
+    }
+
+    private static String ageGroupLabel(int group) {
+        return group + 1 < AGE_GROUPS.length ? AGE_GROUPS[group] + "-" + (AGE_GROUPS[group + 1] - 1) : AGE_GROUPS[group] + "+";
+    }
+
+    private static String pair(double before, double after) {
+        return String.format("%.3f -> %.3f", before, after);
+    }
+
+    private static double mean(List<Double> sorted) {
+        return sorted.stream().mapToDouble(Double::doubleValue).average().orElse(Double.NaN);
+    }
+
+    private static double quantile(List<Double> sorted, double q) {
+        double pos = q * (sorted.size() - 1);
+        int lower = (int) Math.floor(pos);
+        int upper = Math.min(lower + 1, sorted.size() - 1);
+        return sorted.get(lower) + (pos - lower) * (sorted.get(upper) - sorted.get(lower));
     }
 
     private static Double parse(String value) {
