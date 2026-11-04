@@ -1592,7 +1592,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
 
 
                 double min_ventilation_rate = 0.;
-                if (dayHour <= 7  || dayHour > 23 ){
+                if (dayHour < 7  || dayHour >= 23 ){
                     //"minimum"  ventilation rate = 0.27 (v_sleep)
                     min_ventilation_rate = 0.27;
                 } else {
@@ -1630,7 +1630,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                     float hourlyNoiseLevel = (float) NoiseMetrics.getHourlyNoiseLevel(dayHour, (weeklyNoiseExposureByHour[weekHour]/actualHourForNoiseExposure));
                     sumExposureNoise += hourlyNoiseLevel;
 
-                    if (dayHour <= 7  || dayHour > 23 ){
+                    if (dayHour < 7  || dayHour >= 23 ){
                         sumActualHourForNoiseExposureNight += actualHourForNoiseExposure;
                         // Lnight without the +10 dB night penalty of Lden
                         sumExposureNoiseNight += (float) NoiseMetrics.getHourlyNoiseEnergy(weeklyNoiseExposureByHour[weekHour]/actualHourForNoiseExposure);
@@ -1998,7 +1998,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                 int dayHour = weekHour % 24;
 
                 double min_ventilation_rate = 0.;
-                if (dayHour <= 7  || dayHour > 23 ){
+                if (dayHour < 7  || dayHour >= 23 ){
                     //"minimum"  ventilation rate = 0.27 (v_sleep)
                     min_ventilation_rate = 0.27;
                 } else {
@@ -2013,7 +2013,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                 float hourlyNoiseLevel = (float) NoiseMetrics.getHourlyNoiseLevel(dayHour, (weeklyNoiseExposureByHour[weekHour]));
                 sumExposureNoise += hourlyNoiseLevel;
 
-                if (dayHour <= 7  || dayHour > 23 ){
+                if (dayHour < 7  || dayHour >= 23 ){
                     // Lnight without the +10 dB night penalty of Lden
                     sumExposureNoiseNight += (float) NoiseMetrics.getHourlyNoiseEnergy(weeklyNoiseExposureByHour[weekHour]);
                 }

@@ -8,9 +8,9 @@ public class NoiseMetrics {
 
     public static double getHourlyNoiseLevel(int hour, double noiseRp) {
 
-        if(hour > 19  && hour <= 23 ){
+        if(hour >= 19  && hour < 23 ){
             return Math.pow(10, (noiseRp + PENALTY_EVENING) / 10);
-        }else if (hour <= 7  || hour > 23 ){
+        }else if (hour < 7  || hour >= 23 ){
             return Math.pow(10, (noiseRp + PENALTY_NIGHT) / 10);
         }else{
             return Math.pow(10, (noiseRp + PENALTY_DAY) / 10);

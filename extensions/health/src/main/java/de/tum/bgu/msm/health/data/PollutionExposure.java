@@ -17,14 +17,14 @@ public class PollutionExposure {
     private static final double REST_VENTILATION_RATE = 0.61; // from Tainio et al., 2016
     private static final double LIGHTACTIVITY_VENTILATION_RATE = 1.125; // using 2.25 MET ((1+ 1.25)/2), see the transport MET to ventilation rate function
     private static final double OTHERSPORTS_VENTILATION_RATE = 2; // 5mMET average intensity of physical activity
-    private static final int SLEEP_START = 24; //aligned with noise night penalty
+    private static final int SLEEP_START = 23; //aligned with noise night penalty, 23:00-07:00
     private static final int SLEEP_END = 7;//aligned with noise night penalty
 
     public static double getHomeExposurePm25(double minutesAtHome, int dayHour ,double locationIncremental) {
         double minutesResting = 0.;
         double minutesSleeping = 0.;
 
-        if(dayHour >= SLEEP_START || dayHour <= SLEEP_END){
+        if(dayHour >= SLEEP_START || dayHour < SLEEP_END){
             minutesSleeping = minutesAtHome;
         } else {
             minutesResting = minutesAtHome;
@@ -36,7 +36,7 @@ public class PollutionExposure {
         double minutesResting = 0.;
         double minutesSleeping = 0.;
 
-        if(dayHour >= SLEEP_START || dayHour <= SLEEP_END){
+        if(dayHour >= SLEEP_START || dayHour < SLEEP_END){
             minutesSleeping = minutesAtHome;
         } else {
             minutesResting = minutesAtHome;
@@ -193,7 +193,7 @@ public class PollutionExposure {
         double minutesResting = 0.;
         double minutesSleeping = 0.;
 
-        if(dayHour >= SLEEP_START || dayHour <= SLEEP_END){
+        if(dayHour >= SLEEP_START || dayHour < SLEEP_END){
             minutesSleeping = minutesAtHome;
         } else {
             minutesResting = minutesAtHome;
@@ -205,7 +205,7 @@ public class PollutionExposure {
         double minutesResting = 0.;
         double minutesSleeping = 0.;
 
-        if(dayHour >= SLEEP_START || dayHour <= SLEEP_END){
+        if(dayHour >= SLEEP_START || dayHour < SLEEP_END){
             minutesSleeping = minutesAtHome;
         } else {
             minutesResting = minutesAtHome;
