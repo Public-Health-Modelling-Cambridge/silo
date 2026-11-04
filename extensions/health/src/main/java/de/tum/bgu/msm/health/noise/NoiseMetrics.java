@@ -17,6 +17,11 @@ public class NoiseMetrics {
         }
     }
 
+    // sound energy without the Lden penalty, for Lnight
+    public static double getHourlyNoiseEnergy(double noiseRp) {
+        return Math.pow(10, noiseRp / 10);
+    }
+
     public static double getHighAnnoyedPercentage(float Lden) {
         //noise %HA high annoyed (Guski et al., 2017)
         return (78.9270 - 3.1162 * Lden + 0.0342 * Lden * Lden);

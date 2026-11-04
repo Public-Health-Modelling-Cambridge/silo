@@ -1632,7 +1632,8 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
 
                     if (dayHour <= 7  || dayHour > 23 ){
                         sumActualHourForNoiseExposureNight += actualHourForNoiseExposure;
-                        sumExposureNoiseNight += hourlyNoiseLevel;
+                        // Lnight without the +10 dB night penalty of Lden
+                        sumExposureNoiseNight += (float) NoiseMetrics.getHourlyNoiseEnergy(weeklyNoiseExposureByHour[weekHour]/actualHourForNoiseExposure);
                     }
                 }
 
@@ -2013,7 +2014,8 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                 sumExposureNoise += hourlyNoiseLevel;
 
                 if (dayHour <= 7  || dayHour > 23 ){
-                    sumExposureNoiseNight += hourlyNoiseLevel;
+                    // Lnight without the +10 dB night penalty of Lden
+                    sumExposureNoiseNight += (float) NoiseMetrics.getHourlyNoiseEnergy(weeklyNoiseExposureByHour[weekHour]);
                 }
             }
 
