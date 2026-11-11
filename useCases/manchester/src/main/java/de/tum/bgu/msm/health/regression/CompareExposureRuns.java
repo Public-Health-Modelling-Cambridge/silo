@@ -14,6 +14,8 @@ import java.util.stream.Stream;
  *   and the persons with the largest change in normalised PM2.5 and NO2
  * - distribution of the normalised exposures by age group: mean, p10, p50, p90 before/after
  * - trip files (healthIndicators_*.csv): per column how many trips changed
+ * - link casualty rates of the accident model (matsim/[year]/[day]/casualtyRates.csv): per accident type how many links
+ *   changed and the total before/after, and the links with the largest change
  * - checks on the new run: persons below background concentration, decomposition by source not adding up to the total
  *
  * Usage: CompareExposureRuns baselineDir newDir [backgroundPm25 backgroundNo2]
@@ -82,7 +84,79 @@ public class CompareExposureRuns {
             }
             compareTables(Table.read(baselineTrips, "t.id"), Table.read(newTrips, "t.id"));
         }
+
+        report.append("\n== Casualty rates (casualtyRates.csv) ==\n");
+        List<Path> newCasualtyFiles = findFiles(newDir, "casualtyRates");
+        if (newCasualtyFiles.isEmpty()) report.append("   none in new run\n");
+        for (Path newCasualties : newCasualtyFiles) {
+            // one file per day with the same name: match by the path within the run
+            Path relative = newDir.relativize(newCasualties);
+            Path baselineCasualties = baselineDir.resolve(relative);
+            report.append("-- ").append(relative).append('\n');
+            if (!Files.exists(baselineCasualties)) {
+                report.append("   not in baseline\n");
+                continue;
+            }
+            compareCasualties(CasualtyRates.read(baselineCasualties), CasualtyRates.read(newCasualties));
+        }
         return report.toString();
+    }
+
+    private void compareCasualties(CasualtyRates baseline, CasualtyRates current) {
+        Set<String> keys = new TreeSet<>(baseline.rates.keySet());
+        keys.addAll(current.rates.keySet());
+        long onlyBaseline = keys.stream().filter(key -> !current.rates.containsKey(key)).count();
+        long onlyNew = keys.stream().filter(key -> !baseline.rates.containsKey(key)).count();
+        report.append(String.format("   rows: baseline %d, new %d, only in baseline %d, only in new %d%n",
+                baseline.rates.size(), current.rates.size(), onlyBaseline, onlyNew));
+
+        // per accident type: rows changed, sum baseline, sum new
+        Map<String, double[]> byType = new TreeMap<>();
+        Set<String> linksChanged = new HashSet<>();
+        Set<String> osmIdsChanged = new HashSet<>();
+        List<String> changes = new ArrayList<>();
+        for (String key : keys) {
+            String linkId = key.substring(0, key.indexOf('|'));
+            String type = key.substring(key.indexOf('|') + 1);
+            double x = baseline.rates.getOrDefault(key, 0.);
+            double y = current.rates.getOrDefault(key, 0.);
+            double[] sums = byType.computeIfAbsent(type, t -> new double[3]);
+            sums[1] += x;
+            sums[2] += y;
+            // rates are small (~1e-5 per link), so the tolerance is relative
+            if (Math.abs(x - y) > TOLERANCE * Math.max(Math.abs(x), Math.abs(y))) {
+                sums[0]++;
+                linksChanged.add(linkId);
+                osmIdsChanged.add(baseline.osmIds.getOrDefault(linkId, current.osmIds.get(linkId)));
+                changes.add(key);
+            }
+        }
+        report.append(String.format("   links changed: %d, OSM IDs: %d%n", linksChanged.size(), osmIdsChanged.size()));
+        report.append(String.format("   %-14s %9s %14s %14s %9s%n", "accidentType", "changed", "sum baseline", "sum new", "change"));
+        double totalBaseline = 0, totalNew = 0;
+        for (Map.Entry<String, double[]> entry : byType.entrySet()) {
+            double[] sums = entry.getValue();
+            totalBaseline += sums[1];
+            totalNew += sums[2];
+            report.append(String.format("   %-14s %9d %14.6g %14.6g %8.3f%%%n", entry.getKey(), (long) sums[0], sums[1], sums[2], percentChange(sums[1], sums[2])));
+        }
+        report.append(String.format("   %-14s %9s %14.6g %14.6g %8.3f%%%n", "total", "", totalBaseline, totalNew, percentChange(totalBaseline, totalNew)));
+
+        if (changes.isEmpty()) return;
+        changes.sort(Comparator.comparingDouble((String key) ->
+                -Math.abs(current.rates.getOrDefault(key, 0.) - baseline.rates.getOrDefault(key, 0.))));
+        report.append(String.format("   largest changes:%n   %-14s %-12s %-12s %12s %12s %9s%n", "link", "type", "osmId", "baseline", "new", "change"));
+        for (String key : changes.subList(0, Math.min(TOP_CHANGES, changes.size()))) {
+            String linkId = key.substring(0, key.indexOf('|'));
+            double x = baseline.rates.getOrDefault(key, 0.);
+            double y = current.rates.getOrDefault(key, 0.);
+            report.append(String.format("   %-14s %-12s %-12s %12.4g %12.4g %8.2f%%%n", linkId, key.substring(key.indexOf('|') + 1),
+                    baseline.osmIds.getOrDefault(linkId, current.osmIds.get(linkId)), x, y, percentChange(x, y)));
+        }
+    }
+
+    private static double percentChange(double before, double after) {
+        return before == 0 ? (after == 0 ? 0 : Double.POSITIVE_INFINITY) : 100 * (after - before) / before;
     }
 
     private void compareTables(Table baseline, Table current) {
@@ -309,6 +383,34 @@ public class CompareExposureRuns {
             String[] row = rows.get(id);
             int pos = columns.indexOf(column);
             return row == null || pos < 0 || pos >= row.length ? null : row[pos];
+        }
+    }
+
+    // casualtyRates.csv: osmId,linkId,accidentType,casualty; one row per link and accident type
+    private static class CasualtyRates {
+        private final Map<String, Double> rates = new HashMap<>();
+        private final Map<String, String> osmIds = new HashMap<>();
+
+        static CasualtyRates read(Path file) throws IOException {
+            // not a Table: linkId repeats for each accident type
+            CasualtyRates casualties = new CasualtyRates();
+            try (BufferedReader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+                List<String> columns = Arrays.asList(in.readLine().split(",", -1));
+                int osmId = columns.indexOf("osmId");
+                int linkId = columns.indexOf("linkId");
+                int type = columns.indexOf("accidentType");
+                int casualty = columns.indexOf("casualty");
+                if (osmId < 0 || linkId < 0 || type < 0 || casualty < 0) {
+                    throw new IllegalStateException("Expected columns osmId, linkId, accidentType, casualty in " + file);
+                }
+                String line;
+                while ((line = in.readLine()) != null) {
+                    String[] row = line.split(",", -1);
+                    casualties.rates.put(row[linkId] + "|" + row[type], Double.parseDouble(row[casualty]));
+                    casualties.osmIds.put(row[linkId], row[osmId]);
+                }
+            }
+            return casualties;
         }
     }
 }
