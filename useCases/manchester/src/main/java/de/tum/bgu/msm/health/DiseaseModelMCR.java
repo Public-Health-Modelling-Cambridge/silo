@@ -223,6 +223,13 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                         .map(Enum::name)                               // Map each enum to its name
                         .collect(Collectors.toList());                 // Collect into List<String>
                 ((PersonHealth) person).getHealthDiseaseTracker().put(Properties.get().main.startYear - 1, diseaseList);
+                // prevalent diseases are also the current state: they count for disease interactions and the mortality
+                // multiplier, and updateHealthDiseaseStates does not draw a disease the person already has
+                for (Diseases disease : prevData.get(person.getId())) {
+                    if (!((PersonHealth) person).getCurrentDisease().contains(disease)) {
+                        ((PersonHealth) person).getCurrentDisease().add(disease);
+                    }
+                }
             } else {
                 //start year-1 as initial state
                 ((PersonHealth) person).getHealthDiseaseTracker().put(Properties.get().main.startYear - 1, Arrays.asList("healthy"));
