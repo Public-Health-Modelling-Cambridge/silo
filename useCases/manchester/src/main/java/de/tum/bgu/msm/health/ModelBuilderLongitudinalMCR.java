@@ -143,7 +143,7 @@ public class ModelBuilderLongitudinalMCR {
 
         //modelContainer.registerModelUpdateListener(new UpdateCarOwnershipModelMuc(dataContainer, properties, SiloUtil.provideNewRandom()));
 
-        modelContainer.registerModelUpdateListener(new AccidentModelMCR(dataContainer, properties, SiloUtil.provideNewRandom()));
+        modelContainer.registerModelUpdateListener(new AccidentModelMCR(dataContainer, properties, SiloUtil.provideNewRandom(), config));
 
         // annual models run in registration order: sport PA before exposure, activity exposure uses the person's sport mMET-hours for the ventilation rate
         modelContainer.registerModelUpdateListener(new SportPAModelMCR(dataContainer, properties, SiloUtil.provideNewRandom()));
