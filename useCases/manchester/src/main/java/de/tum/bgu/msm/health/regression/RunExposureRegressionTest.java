@@ -17,7 +17,8 @@ import java.util.stream.Stream;
 /**
  * Regression test of the health exposure model on the small test area created by CreateRegressionTestArea:
  * 1. runs RunExposureHealthOffline on the test area
- * 2. saves the outputs to regression/runs/[time]_[git commit]_[label]
+ * 2. saves the outputs to regression/runs/[time]_[git commit]_[label]; a fix can be tested before committing it:
+ *    then the commit is marked "+dirty" and the uncommitted changes are saved as changes.diff
  * 3. compares them with the previous run (or the run given as baseline) and writes comparison.txt
  *
  * Run with the test area directory as working directory, e.g. F:/models/jibe/manchester_test
@@ -41,8 +42,9 @@ public class RunExposureRegressionTest {
         }
         Path scenarioOutput = Paths.get("scenOutput", properties.getProperty("scenario.name").trim());
 
-        String commit = gitCommit();
-        String runName = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmm")) + "_" + commit + (label.isEmpty() ? "" : "_" + label);
+        // record the code state at the start, as close as possible to the code that was built
+        GitState git = GitState.read();
+        String runName = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmm")) + "_" + git.label() + (label.isEmpty() ? "" : "_" + label);
         Path runDir = RUNS.resolve(runName);
 
         Instant start = Instant.now();
@@ -51,7 +53,16 @@ public class RunExposureRegressionTest {
 
         saveOutputs(scenarioOutput, runDir, start);
         try (BufferedWriter out = Files.newBufferedWriter(runDir.resolve("run.txt"), StandardCharsets.UTF_8)) {
-            out.write("commit: " + commit + "\nlabel: " + label + "\nruntime: " + runtime.toMinutes() + " min " + runtime.toSecondsPart() + " s\n");
+            out.write("commit: " + git.label() + "\nlabel: " + label + "\nruntime: " + runtime.toMinutes() + " min " + runtime.toSecondsPart() + " s\n");
+            if (!git.changes.isEmpty()) {
+                out.write("uncommitted changes: changes.diff\n");
+            }
+            if (!git.untrackedFiles.isEmpty()) {
+                out.write("untracked files (not in changes.diff):\n" + git.untrackedFiles + "\n");
+            }
+        }
+        if (!git.changes.isEmpty()) {
+            Files.writeString(runDir.resolve("changes.diff"), git.changes + "\n", StandardCharsets.UTF_8);
         }
 
         Path baseline = baselineName != null ? RUNS.resolve(baselineName) : previousRun(runDir);
@@ -94,25 +105,41 @@ public class RunExposureRegressionTest {
         }
     }
 
-    // short commit of the code that was run, "+dirty" if there are uncommitted changes
-    private static String gitCommit() {
-        try {
-            Path dir = Paths.get(RunExposureRegressionTest.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-            while (dir != null && !Files.exists(dir.resolve(".git"))) {
-                dir = dir.getParent();
+    // commit and uncommitted changes of the repository the code was run from
+    private static class GitState {
+        private String commit = "nogit";
+        private String changes = "";
+        private String untrackedFiles = "";
+
+        static GitState read() {
+            GitState state = new GitState();
+            try {
+                Path dir = Paths.get(RunExposureRegressionTest.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+                while (dir != null && !Files.exists(dir.resolve(".git"))) {
+                    dir = dir.getParent();
+                }
+                if (dir != null) {
+                    state.commit = git(dir, "rev-parse", "--short", "HEAD");
+                    state.changes = git(dir, "diff", "HEAD");
+                    state.untrackedFiles = git(dir, "ls-files", "--others", "--exclude-standard");
+                }
+            } catch (Exception e) {
+                state.commit = "nogit";
             }
-            if (dir == null) return "nogit";
-            String commit = git(dir, "rev-parse", "--short", "HEAD");
-            return git(dir, "status", "--porcelain", "--untracked-files=no").isEmpty() ? commit : commit + "+dirty";
-        } catch (Exception e) {
-            return "nogit";
+            return state;
+        }
+
+        // short commit, "+dirty" if the run includes uncommitted changes
+        String label() {
+            return changes.isEmpty() ? commit : commit + "+dirty";
         }
     }
 
     private static String git(Path dir, String... args) throws IOException, InterruptedException {
         List<String> command = new ArrayList<>(List.of("git", "-C", dir.toString()));
         command.addAll(Arrays.asList(args));
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        // stderr is discarded, e.g. line ending warnings would otherwise end up in changes.diff
+        Process process = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start();
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
         process.waitFor();
         return output;
