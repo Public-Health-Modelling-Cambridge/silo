@@ -33,7 +33,11 @@ public class HealthDiseaseTrackerWriter {
         //print header
         pwp.print("id");
         int startYear = Properties.get().main.baseYear - 1;
-        int endYear = Properties.get().main.endYear;
+        // years up to endYear - 1 are simulated; an offline run (RunExposureHealthOffline) also updates endYear itself
+        int lastTrackedYear = householdData.getPersons().stream()
+                .flatMap(pp -> ((PersonHealth) pp).getHealthDiseaseTracker().keySet().stream())
+                .max(Integer::compare).orElse(startYear);
+        int endYear = Math.max(Properties.get().main.endYear, lastTrackedYear + 1);
 
         for(int i = startYear; i < endYear; i++) {
             pwp.print(",");

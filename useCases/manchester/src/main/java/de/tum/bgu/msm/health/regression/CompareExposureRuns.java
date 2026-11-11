@@ -14,6 +14,7 @@ import java.util.stream.Stream;
  *   and the persons with the largest change in normalised PM2.5 and NO2
  * - distribution of the normalised exposures by age group: mean, p10, p50, p90 before/after
  * - trip files (healthIndicators_*.csv): per column how many trips changed
+ * - disease states (pp_healthDiseaseTracker_*.csv): per year how many persons changed state, and persons per disease
  * - link casualty rates of the accident model (matsim/[year]/[day]/casualtyRates.csv): per accident type how many links
  *   changed and the total before/after, and the links with the largest change
  * - checks on the new run: persons below background concentration, decomposition by source not adding up to the total
@@ -85,6 +86,15 @@ public class CompareExposureRuns {
             compareTables(Table.read(baselineTrips, "t.id"), Table.read(newTrips, "t.id"));
         }
 
+        Path baselineDiseases = findFile(baselineDir, "pp_healthDiseaseTracker_");
+        Path newDiseases = findFile(newDir, "pp_healthDiseaseTracker_");
+        report.append("\n== Disease states (pp_healthDiseaseTracker_*.csv) ==\n");
+        if (newDiseases == null) {
+            report.append("   none in new run\n");
+        } else {
+            reportDiseaseStates(baselineDiseases == null ? null : Table.read(baselineDiseases, "id"), Table.read(newDiseases, "id"));
+        }
+
         report.append("\n== Casualty rates (casualtyRates.csv) ==\n");
         List<Path> newCasualtyFiles = findFiles(newDir, "casualtyRates");
         if (newCasualtyFiles.isEmpty()) report.append("   none in new run\n");
@@ -100,6 +110,52 @@ public class CompareExposureRuns {
             compareCasualties(CasualtyRates.read(baselineCasualties), CasualtyRates.read(newCasualties));
         }
         return report.toString();
+    }
+
+    // per year: persons whose state changed, and persons with each disease (states are lists separated by "|")
+    private void reportDiseaseStates(Table baseline, Table current) {
+        if (baseline == null) {
+            report.append("   not in baseline\n");
+        } else {
+            Set<String> common = new TreeSet<>(baseline.rows.keySet());
+            common.retainAll(current.rows.keySet());
+            report.append(String.format("   rows: baseline %d, new %d, only in baseline %d, only in new %d%n",
+                    baseline.rows.size(), current.rows.size(), baseline.rows.size() - common.size(), current.rows.size() - common.size()));
+        }
+        for (String year : current.columns.subList(1, current.columns.size())) {
+            boolean inBaseline = baseline != null && baseline.columns.contains(year);
+            Map<String, Integer> countBaseline = inBaseline ? countDiseases(baseline, year) : new TreeMap<>();
+            Map<String, Integer> countNew = countDiseases(current, year);
+            int changed = 0;
+            if (inBaseline) {
+                for (String id : current.rows.keySet()) {
+                    if (baseline.rows.containsKey(id) && !diseases(baseline.get(id, year)).equals(diseases(current.get(id, year)))) changed++;
+                }
+            }
+            report.append(String.format("%n   %s: %s%n   %-24s %10s %10s %10s%n", year,
+                    inBaseline ? "persons changed " + changed : "not in baseline", "state", "baseline", "new", "change"));
+            Set<String> states = new TreeSet<>(countBaseline.keySet());
+            states.addAll(countNew.keySet());
+            for (String state : states) {
+                int x = countBaseline.getOrDefault(state, 0);
+                int y = countNew.getOrDefault(state, 0);
+                report.append(String.format("   %-24s %10s %10d %10s%n", state, inBaseline ? String.valueOf(x) : "-", y, inBaseline ? String.format("%+d", y - x) : "-"));
+            }
+        }
+    }
+
+    private static Map<String, Integer> countDiseases(Table table, String year) {
+        Map<String, Integer> counts = new TreeMap<>();
+        for (String id : table.rows.keySet()) {
+            for (String disease : diseases(table.get(id, year))) {
+                counts.merge(disease, 1, Integer::sum);
+            }
+        }
+        return counts;
+    }
+
+    private static Set<String> diseases(String state) {
+        return state == null || state.isEmpty() ? Set.of("null") : new TreeSet<>(Arrays.asList(state.split("\\|")));
     }
 
     private void compareCasualties(CasualtyRates baseline, CasualtyRates current) {
