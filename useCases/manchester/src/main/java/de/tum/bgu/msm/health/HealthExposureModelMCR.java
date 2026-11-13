@@ -840,7 +840,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
             int exactWeekHour = exactDayHour + 24 * dayCode;
 
             if(exactWeekHour > 167){
-                break;
+            	exactWeekHour %= 168; //wrap hours past Sunday back to Monday
             }
 
             hourOccupied[exactWeekHour] += (float) durationInThisHour;
@@ -1157,7 +1157,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                     int exactWeekHour = exactDayHour + 24 * dayCode;
 
                     if(exactWeekHour > 167){
-                        break;
+                    	exactWeekHour %= 168; //wrap hours past Sunday back to Monday
                     }
 
                     hourOccupied[exactWeekHour] += (float) durationInThisHour;
@@ -1406,7 +1406,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
             int exactWeekHour = exactDayHour + 24 * dayCode;
 
             if(exactWeekHour > 167){
-                break;
+            	exactWeekHour %= 168; //wrap hours past Sunday back to Monday
             }
             hourOccupied[exactWeekHour] = (float) durationInThisHour;
 
