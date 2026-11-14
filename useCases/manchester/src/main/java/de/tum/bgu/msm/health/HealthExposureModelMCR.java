@@ -1673,6 +1673,14 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
             ((PersonHealthMCR) person).setNoiseHighSleepDisturbancePercentage((float) NoiseMetrics.getHighSleepDisturbancePercentage(Lnight));
 
             ((PersonHealth) person).setWeeklyGreenExposuresNormalised(((PersonHealthMCR) person).getWeeklyNdviExposure() / sumActualHourForGreenExposure);
+            
+            // Guard against negative weekly home time when overlapping MITO trips and activities exceed 168 hours
+            if (((PersonHealthMCR) person).getWeeklyHomeMinutes() < 0.0f) {
+                float overflowMinutes = -((PersonHealthMCR) person).getWeeklyHomeMinutes();
+                float deductMinutes = Math.min(overflowMinutes, ((PersonHealthMCR) person).getWeeklyActivityMinutes());
+                ((PersonHealthMCR) person).updateWeeklyActivityMinutes(-deductMinutes);
+                ((PersonHealthMCR) person).setWeeklyHomeMinutes(0.f);
+            }
         }
     }
 
