@@ -58,6 +58,8 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     //for disease model
     private EnumMap<Diseases, Float> randomNumByDisease = new EnumMap<>(Diseases.class);
     private EnumMap<Diseases, Float> lastYearSurvivalRateByDisease = new EnumMap<>(Diseases.class);
+    // depression remits, so a person can have several episodes: one life series of random numbers per person, one per episode
+    private final Random depressionEpisodeRandom;
     private EnumMap<HealthExposures, EnumMap<Diseases, Float>> relativeRisksByDisease = new EnumMap<>(HealthExposures.class);
     private Map<Integer, List<String>> healthDiseaseTracker = new HashMap<>();
     private List<Diseases> currentDisease = new ArrayList<>();
@@ -75,6 +77,8 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
         for (Diseases diseases : Diseases.values()){
             randomNumByDisease.put(diseases, SiloUtil.getRandomObject().nextFloat());
         }
+        // seeded from the person's first depression random number and id, so it does not draw from the SILO random object
+        depressionEpisodeRandom = new Random(((long) Float.floatToIntBits(randomNumByDisease.get(Diseases.depression)) << 32) ^ id);
 
         //initialize survival rate for diseases
         for (Diseases diseases : Diseases.values()){
@@ -516,6 +520,11 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
 
     public EnumMap<Diseases, Float> getRandomNumByDisease() {
         return randomNumByDisease;
+    }
+
+    /** random number for the next depression episode, after remission of the previous one */
+    public float nextDepressionRandomNum() {
+        return depressionEpisodeRandom.nextFloat();
     }
 
     public EnumMap<Diseases, Float> getLastYearSurvivalRateByDisease() {

@@ -243,6 +243,25 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
             PersonHealth personHealth = (PersonHealth) person;
             List<String> newDisease = new ArrayList<>();
 
+            // Depression remits after one year: an episode that started in year - 1 ends now (prevalent depression is
+            // kept through startYear). The person can get depression again, with a new survival state and the next random
+            // number of the person's life series for depression
+            List<String> previousState = personHealth.getHealthDiseaseTracker().get(year - 1);
+            boolean depressionRemits = year - 1 >= Properties.get().main.startYear &&
+                    previousState != null &&
+                    previousState.contains(Diseases.depression.toString());
+            if (depressionRemits) {
+                personHealth.getCurrentDisease().remove(Diseases.depression);
+                personHealth.getLastYearSurvivalRateByDisease().put(Diseases.depression, 1.f);
+                personHealth.getRandomNumByDisease().put(Diseases.depression, ((PersonHealthMCR) person).nextDepressionRandomNum());
+
+                previousState = new ArrayList<>(previousState);
+                previousState.remove(Diseases.depression.toString());
+                if (previousState.isEmpty()) {
+                    previousState.add("healthy");
+                }
+            }
+
             for (Diseases diseases : Diseases.values()) {
                 if (diseases.equals(Diseases.all_cause_mortality)) {
                     continue;
@@ -271,52 +290,21 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                 personHealth.getLastYearSurvivalRateByDisease().put(diseases, thisYearSurvivalRate);
             }
 
-            // Set remission in terms of years - this is year_remission -1, so with 2, the remission_year is 1 year
-            int year_remission = 2;
-            int targetYear = year - year_remission;
-
-            List<String> trackerYearLag = personHealth.getHealthDiseaseTracker().get(targetYear);
-            List<String> trackerPrevYear = personHealth.getHealthDiseaseTracker().get(year - 1);
-
-            if (trackerYearLag != null &&
-                    targetYear >= Properties.get().main.startYear &&
-                    trackerYearLag.contains(Diseases.depression.toString()) &&
-                    trackerPrevYear != null &&
-                    trackerPrevYear.contains(Diseases.depression.toString())) {
-
-                //System.out.println(personHealth.getHealthDiseaseTracker().toString());
-
-                // Create a new modifiable list to avoid changing identity of singleton lists
-                List<String> updatedList = new ArrayList<>(trackerPrevYear);
-
-                // Only remove the first occurrence of "depression" (if present)
-                updatedList.remove(Diseases.depression.toString());
-
-                if (updatedList.isEmpty()) {
-                    updatedList.add("healthy");
-                }
-                // Update the map with the new list for year - 1
-                personHealth.getHealthDiseaseTracker().put(year - 1, updatedList);
-
-                //System.out.println("depression removed from: " + personHealth.getId());
-
-            }
-
             //update Disease track map
             if (newDisease.isEmpty()) {
-                if (personHealth.getHealthDiseaseTracker().get(year - 1) == null) { // todo: min(keysetTracker) == currentYear ??
+                if (previousState == null) { // todo: min(keysetTracker) == currentYear ??
                     // newborns
                     personHealth.getHealthDiseaseTracker().put(year, Arrays.asList("healthy")); // todo: check if redundant ?
                 } else {
                     //for base year, year-1 is the initial state "healthy"
-                    personHealth.getHealthDiseaseTracker().put(year, personHealth.getHealthDiseaseTracker().get(year - 1));
+                    personHealth.getHealthDiseaseTracker().put(year, previousState);
                 }
             } else {
 
                 List<String> fullDisease = new ArrayList<>();
 
                 // DO NOT add previous states when a person has died in the injury model. These states are exclusive.
-                if (personHealth.getHealthDiseaseTracker().get(year - 1) != null &&
+                if (previousState != null &&
                         !(newDisease.contains(Diseases.dead_bike.toString()) ||
                                 newDisease.contains(Diseases.dead_walk.toString()) ||
                                 newDisease.contains(Diseases.dead_car.toString())) &&
@@ -324,7 +312,7 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                                 ((PersonHealth) person).getCurrentDisease().contains(Diseases.dead_walk) ||
                                 ((PersonHealth) person).getCurrentDisease().contains(Diseases.dead_car)))
                 {
-                    fullDisease.addAll(personHealth.getHealthDiseaseTracker().get(year - 1)); // get old diseases
+                    fullDisease.addAll(previousState); // get old diseases
                 }
 
                 newDisease.stream()
