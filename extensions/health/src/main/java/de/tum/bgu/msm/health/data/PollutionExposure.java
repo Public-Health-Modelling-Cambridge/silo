@@ -20,6 +20,15 @@ public class PollutionExposure {
     private static final int SLEEP_START = 23; //aligned with noise night penalty, 23:00-07:00
     private static final int SLEEP_END = 7;//aligned with noise night penalty
 
+    // Cyclists: the mode factor on the traffic increment is further adjusted by the cycle facility of the link. Separated
+    // tracks lower traffic-marker pollutants (NO2) by 20-35% compared with on-road lanes, painted lanes differ little from
+    // the carriageway, and PM2.5 mass responds weakly to separation (Kendrick et al., 2011; MacNaughton et al., 2014;
+    // Farrell et al., 2015). On links closed to motor traffic the mode factor is 1.0
+    private static final double CYCLE_LANE_FACTOR_PM25 = 1.0;
+    private static final double CYCLE_TRACK_FACTOR_PM25 = 0.9;
+    private static final double CYCLE_LANE_FACTOR_NO2 = 0.9;
+    private static final double CYCLE_TRACK_FACTOR_NO2 = 0.7;
+
     public static double getHomeExposurePm25(double minutesAtHome, int dayHour ,double locationIncremental) {
         double minutesResting = 0.;
         double minutesSleeping = 0.;
@@ -71,9 +80,9 @@ public class PollutionExposure {
                     modeExposureFactor = 1.;
                 } else{
                     if (Objects.equals(linkCycleType, "lane") || Objects.equals(linkCycleOsm, "painted")){
-                        modeExposureFactor = 2. * 0.9;
+                        modeExposureFactor = 2. * CYCLE_LANE_FACTOR_PM25;
                     } else if (Objects.equals(linkCycleType, "track") || Objects.equals(linkCycleOsm, "protected") ) {
-                        modeExposureFactor = 2. * 0.8;
+                        modeExposureFactor = 2. * CYCLE_TRACK_FACTOR_PM25;
                     } else{
                         modeExposureFactor = 2.;
                     }
@@ -102,9 +111,9 @@ public class PollutionExposure {
                     modeExposureFactor = 1.;
                 } else{
                     if (Objects.equals(linkCycleType, "lane") || Objects.equals(linkCycleOsm, "painted")){
-                        modeExposureFactor = 4.5 * 0.9;
+                        modeExposureFactor = 4.5 * CYCLE_LANE_FACTOR_NO2;
                     } else if (Objects.equals(linkCycleType, "track") || Objects.equals(linkCycleOsm, "protected")) {
-                        modeExposureFactor = 4.5 * 0.8;
+                        modeExposureFactor = 4.5 * CYCLE_TRACK_FACTOR_NO2;
                     } else{
                         modeExposureFactor = 4.5;
                     }
