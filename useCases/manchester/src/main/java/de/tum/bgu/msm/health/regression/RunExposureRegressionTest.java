@@ -16,7 +16,8 @@ import java.util.stream.Stream;
 
 /**
  * Regression test of the health exposure model on the small test area created by CreateRegressionTestArea:
- * 1. runs RunExposureHealthOffline on the test area
+ * 1. runs RunExposureHealthOffline on the test area; the disease model runs on to LAST_DISEASE_YEAR with the 2021
+ *    exposures, so that changes in disease transitions over several years (e.g. remission) show in the comparison
  * 2. saves the outputs to regression/runs/[time]_[git commit]_[label]; a fix can be tested before committing it:
  *    then the commit is marked "+dirty" and the uncommitted changes are saved as changes.diff
  * 3. compares them with the previous run (or the run given as baseline) and writes comparison.txt
@@ -29,6 +30,7 @@ public class RunExposureRegressionTest {
     private static final String PROPERTIES = "siloMCR_reference.properties";
     private static final String CONFIG = "configBase.xml";
     private static final Path RUNS = Paths.get("regression", "runs");
+    private static final int LAST_DISEASE_YEAR = 2025;
 
     public static void main(String[] args) throws IOException {
         String label = args.length > 0 ? args[0].replaceAll("[^A-Za-z0-9_-]", "-") : "";
@@ -48,12 +50,12 @@ public class RunExposureRegressionTest {
         Path runDir = RUNS.resolve(runName);
 
         Instant start = Instant.now();
-        RunExposureHealthOffline.main(new String[]{PROPERTIES, CONFIG});
+        RunExposureHealthOffline.run(PROPERTIES, CONFIG, LAST_DISEASE_YEAR);
         Duration runtime = Duration.between(start, Instant.now());
 
         saveOutputs(scenarioOutput, runDir, start);
         try (BufferedWriter out = Files.newBufferedWriter(runDir.resolve("run.txt"), StandardCharsets.UTF_8)) {
-            out.write("commit: " + git.label() + "\nlabel: " + label + "\nruntime: " + runtime.toMinutes() + " min " + runtime.toSecondsPart() + " s\n");
+            out.write("commit: " + git.label() + "\nlabel: " + label + "\ndisease years: 2021-" + LAST_DISEASE_YEAR + "\nruntime: " + runtime.toMinutes() + " min " + runtime.toSecondsPart() + " s\n");
             if (!git.changes.isEmpty()) {
                 out.write("uncommitted changes: changes.diff\n");
             }

@@ -38,15 +38,24 @@ public class RunExposureHealthOffline {
     private final static Logger logger = LogManager.getLogger(RunExposureHealthOffline.class);
 
     public static void main(String[] args) {
+        run(args[0], args.length > 1 ? args[1] : null, 2021);
+    }
 
-        Properties properties = SiloUtil.siloInitialization(args[0]);
+    /**
+     * Runs the models for 2021. The disease model then runs the further years up to lastDiseaseYear with the 2021
+     * exposures, without ageing or demography: the regression test uses this to show disease state changes over several
+     * years, e.g. remission.
+     */
+    public static void run(String propertiesFile, String configFile, int lastDiseaseYear) {
+
+        Properties properties = SiloUtil.siloInitialization(propertiesFile);
 
         // todo: check if that is good practice/ necessary to run the accident model, but need to make sure there are no implications elsewhere
         Resources.initializeResources(properties.transportModel.mitoPropertiesPath);
 
         Config config = null;
-        if (args.length > 1 && args[1] != null) {
-            config = ConfigUtils.loadConfig(args[1]);
+        if (configFile != null) {
+            config = ConfigUtils.loadConfig(configFile);
         }
         logger.info("Started SILO land use model for the Greater Manchester");
         HealthDataContainerImpl dataContainer = DataBuilderHealth.getModelDataForManchester(properties, config);
@@ -68,7 +77,9 @@ public class RunExposureHealthOffline {
         //exposureModelMCR.setup(); // read-in the exposure file
         exposureModelMCR.endYear(2021);
         diseaseModelMCR.setup();
-        diseaseModelMCR.endYear(2021);
+        for (int year = 2021; year <= lastDiseaseYear; year++) {
+            diseaseModelMCR.endYear(year);
+        }
         dataContainer.endSimulation();
 
         logger.info("Finished SILO.");
