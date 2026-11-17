@@ -840,7 +840,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
             int exactWeekHour = exactDayHour + 24 * dayCode;
 
             if(exactWeekHour > 167){
-                break;
+            	exactWeekHour %= 168; //wrap hours past Sunday back to Monday
             }
 
             hourOccupied[exactWeekHour] += (float) durationInThisHour;
@@ -1157,7 +1157,7 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                     int exactWeekHour = exactDayHour + 24 * dayCode;
 
                     if(exactWeekHour > 167){
-                        break;
+                    	exactWeekHour %= 168; //wrap hours past Sunday back to Monday
                     }
 
                     hourOccupied[exactWeekHour] += (float) durationInThisHour;
@@ -1406,9 +1406,9 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
             int exactWeekHour = exactDayHour + 24 * dayCode;
 
             if(exactWeekHour > 167){
-                break;
+            	exactWeekHour %= 168; //wrap hours past Sunday back to Monday
             }
-            hourOccupied[exactWeekHour] = (float) durationInThisHour;
+            hourOccupied[exactWeekHour] += (float) durationInThisHour;
 
             String rpId = getReceiverPointId(trip.getTripDestinationType(), trip.getTripDestinationMicroId());
             ActivityLocation activityLocation = ((DataContainerHealth)dataContainer).getActivityLocations().get(rpId);
@@ -1444,15 +1444,15 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
                 // new ventilation
                 double exposurePM25 = PollutionExposure.getActivityExposurePm25_newvent(durationInThisHour * 60, sportweekmMETh, locationIncrementalPM25);
                 double exposureNo2 = PollutionExposure.getActivityExposureNo2_newvent(durationInThisHour * 60, sportweekmMETh, locationIncrementalNO2);
-                activityExposurePM25ByHour[exactWeekHour] = (float) exposurePM25;
-                activityExposureNo2ByHour[exactWeekHour] = (float) exposureNo2;
+                activityExposurePM25ByHour[exactWeekHour] += (float) exposurePM25;
+                activityExposureNo2ByHour[exactWeekHour] += (float) exposureNo2;
                 activityExposurePM25 += exposurePM25;
                 activityExposureNo2 += exposureNo2;
 
                 // Noise level
                 if(!activityLocation.getNoiseLevel2TimeBin().isEmpty()){
                     double noiseExposure = activityLocation.getNoiseLevel2TimeBin().get(exactDayHour) * durationInThisHour;
-                    activityNoiseExposureByHour[exactWeekHour] = (float) noiseExposure;
+                    activityNoiseExposureByHour[exactWeekHour] += (float) noiseExposure;
                     activityNoiseExposure += noiseExposure;
                 }
 
@@ -1673,6 +1673,14 @@ public class HealthExposureModelMCR extends AbstractModel implements ModelUpdate
             ((PersonHealthMCR) person).setNoiseHighSleepDisturbancePercentage((float) NoiseMetrics.getHighSleepDisturbancePercentage(Lnight));
 
             ((PersonHealth) person).setWeeklyGreenExposuresNormalised(((PersonHealthMCR) person).getWeeklyNdviExposure() / sumActualHourForGreenExposure);
+            
+            // Guard against negative weekly home time when overlapping MITO trips and activities exceed 168 hours
+            if (((PersonHealthMCR) person).getWeeklyHomeMinutes() < 0.0f) {
+                float overflowMinutes = -((PersonHealthMCR) person).getWeeklyHomeMinutes();
+                float deductMinutes = Math.min(overflowMinutes, ((PersonHealthMCR) person).getWeeklyActivityMinutes());
+                ((PersonHealthMCR) person).updateWeeklyActivityMinutes(-deductMinutes);
+                ((PersonHealthMCR) person).setWeeklyHomeMinutes(0.f);
+            }
         }
     }
 
