@@ -114,17 +114,8 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
 
             for (Person person : dataContainer.getHouseholdDataManager().getPersons()) {
 
-                //age under 18 no disease prob applied
-                if (person.getAge() < 18) {
-                    continue;
-                }
-
                 //TODO: more comprehensive validity check of disease for certain gender/age
                 if (diseases.equals(Diseases.endometrial_cancer) & person.getGender().equals(Gender.MALE)) {
-                    continue;
-                }
-
-                if (diseases.equals(Diseases.breast_cancer) & person.getGender().equals(Gender.MALE)) {
                     continue;
                 }
 
@@ -146,17 +137,18 @@ public class DiseaseModelMCR extends AbstractModel implements ModelUpdateListene
                 // Effects of exposures
                 double sickProb = 0;
 
-                // Cleaner code - optimised by Ismail
-                if (adjustByRelativeRisk) {
-                    boolean hasDementia = ((PersonHealth) person).getCurrentDisease().contains(Diseases.all_cause_dementia);
-
-                    if (!(hasDementia && person.getAge() < 60)) {
-                        for (HealthExposures exposures : HealthExposures.values()) {
-                            sickRate *= ((PersonHealth) person)
-                                    .getRelativeRisksByDisease()
-                                    .get(exposures)
-                                    .getOrDefault(diseases, 1.f);
-                        }
+                // exposure relative risks apply from age 50 for dementia, from age 18 for the other diseases, and to
+                // females only for breast cancer; the others get the transition rate (relative risk 1)
+                int minAgeRelativeRisk = diseases.equals(Diseases.all_cause_dementia) ? 50 : 18;
+                boolean applyRelativeRisk = adjustByRelativeRisk &&
+                        person.getAge() >= minAgeRelativeRisk &&
+                        !(diseases.equals(Diseases.breast_cancer) && person.getGender().equals(Gender.MALE));
+                if (applyRelativeRisk) {
+                    for (HealthExposures exposures : HealthExposures.values()) {
+                        sickRate *= ((PersonHealth) person)
+                                .getRelativeRisksByDisease()
+                                .get(exposures)
+                                .getOrDefault(diseases, 1.f);
                     }
                 }
 
