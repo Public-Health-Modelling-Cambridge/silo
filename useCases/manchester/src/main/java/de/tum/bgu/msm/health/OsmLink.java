@@ -5,15 +5,18 @@ import routing.components.JctStress;
 import routing.components.LinkStress;
 
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class OsmLink {
 
     int osmId;
     public String roadType;
-    public String highway;
     public boolean onwysmm;
+    // NaN when no member link has a speed limit (e.g. vehicle connectors); treated as the reference category
     public double speedLimitMPH;
+    // true if member links disagree on roadType, speedLimitMPH or onwysmm
+    public boolean mixedAttributes;
 
     public boolean bikeAllowed;
     public boolean carAllowed;
@@ -43,9 +46,8 @@ public class OsmLink {
         if (networkLinks.isEmpty()) {
             // Set default values if no links
             this.roadType = "residential";
-            this.highway = "unclassified";
             this.onwysmm = false;
-            this.speedLimitMPH = 0.0;
+            this.speedLimitMPH = Double.NaN;
             this.bikeAllowed = false;
             this.carAllowed = false;
             this.walkAllowed = false;
@@ -62,12 +64,22 @@ public class OsmLink {
             return;
         }
 
-        Link first = networkLinks.iterator().next();
+        // Street-level categorical attributes: length-weighted mode over the member edges, ignoring missing values
+        Collection<Link> edges = uniqueEdges();
+        this.mixedAttributes = false;
 
-        this.roadType = getStringAttribute(first, "type", "none");
-        this.highway = getStringAttribute(first, "highway", "none");
-        this.onwysmm = getBooleanAttribute(first, "onwysmm", false);
-        this.speedLimitMPH = getDoubleAttribute(first, "speedLimitMPH", 0.0);
+        String type = lengthWeightedMode(edges, l -> getStringAttribute(l, "type", null));
+        this.roadType = type != null ? type : roadTypeFromFlags(edges);
+
+        Boolean oneWay = lengthWeightedMode(edges, l -> l.getAttributes().getAttribute("onwysmm") instanceof Boolean ?
+                (Boolean) l.getAttributes().getAttribute("onwysmm") : null);
+        this.onwysmm = oneWay != null ? oneWay : false;
+
+        Double speed = lengthWeightedMode(edges, l -> {
+            double s = getDoubleAttribute(l, "speedLimitMPH", Double.NaN);
+            return Double.isNaN(s) || s <= 0 ? null : s;
+        });
+        this.speedLimitMPH = speed != null ? speed : Double.NaN;
 
         int bikeAllowedInt = networkLinks.stream()
                 .mapToInt(link -> link.getAllowedModes().contains("bike") ? 1 : 0)
@@ -87,18 +99,7 @@ public class OsmLink {
         //double totalLength = networkLinks.stream().mapToDouble(Link::getLength).sum();
         //this.lengthSum = (!onwysmm) ? totalLength / 2.0 : totalLength;
 
-        Map<Double, Double> edgeIdToLength = new HashMap<>();
-
-        for (Link link : networkLinks) {
-            double edgeId = getDoubleAttribute(link, "edgeID", 0.0);
-            edgeIdToLength.putIfAbsent(edgeId, link.getLength());
-        }
-
-        double totalLength = edgeIdToLength.values().stream()
-                .mapToDouble(Double::doubleValue)
-                .sum();
-
-        this.lengthSum = totalLength;
+        this.lengthSum = edges.stream().mapToDouble(Link::getLength).sum();
 
         Map<Double, Long> widthFreq = networkLinks.stream()
                 .map(l -> getDoubleAttribute(l, "width", 0.0))
@@ -136,6 +137,47 @@ public class OsmLink {
                 })
                 .max()
                 .orElse(0.0);
+    }
+
+    // One link per original network edge (out/rtn share an edgeID); links without a valid edgeID are kept individually.
+    // Links are visited in ID order so the result does not depend on set iteration order.
+    private Collection<Link> uniqueEdges() {
+        Map<String, Link> edges = new LinkedHashMap<>();
+        networkLinks.stream()
+                .sorted(Comparator.comparing(l -> l.getId().toString()))
+                .forEach(l -> {
+                    double edgeId = getDoubleAttribute(l, "edgeID", -1.0);
+                    String key = edgeId >= 0 ? "edge_" + (long) edgeId : "link_" + l.getId();
+                    edges.putIfAbsent(key, l);
+                });
+        return edges.values();
+    }
+
+    // Value covering the largest length; null values (missing attribute) are ignored.
+    // Ties are broken by the larger value so the result is deterministic.
+    private <T extends Comparable<T>> T lengthWeightedMode(Collection<Link> edges, Function<Link, T> getter) {
+        Map<T, Double> lengthByValue = new HashMap<>();
+        for (Link link : edges) {
+            T value = getter.apply(link);
+            if (value != null) {
+                lengthByValue.merge(value, link.getLength(), Double::sum);
+            }
+        }
+        if (lengthByValue.size() > 1) {
+            this.mixedAttributes = true;
+        }
+        return lengthByValue.entrySet().stream()
+                .max(Map.Entry.<T, Double>comparingByValue().thenComparing(Map.Entry.<T, Double>comparingByKey()))
+                .map(Map.Entry::getKey)
+                .orElse(null);
+    }
+
+    // Fallback when no member link has a "type" (e.g. vehicle connectors), based on the road class flags
+    private String roadTypeFromFlags(Collection<Link> edges) {
+        if (edges.stream().anyMatch(l -> getBooleanAttribute(l, "motorway", false))) return "motorway";
+        if (edges.stream().anyMatch(l -> getBooleanAttribute(l, "trunk", false))) return "trunk";
+        if (edges.stream().anyMatch(l -> getBooleanAttribute(l, "primary", false))) return "primary";
+        return "none";
     }
 
     private double getDoubleAttribute(Link l, String key, double defaultVal) {

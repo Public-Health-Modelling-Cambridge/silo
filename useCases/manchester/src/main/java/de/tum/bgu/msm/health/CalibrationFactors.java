@@ -1,10 +1,18 @@
 package de.tum.bgu.msm.health;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class CalibrationFactors {
+    private static final Logger logger = LogManager.getLogger(CalibrationFactors.class);
+    private static final double UNCALIBRATED_FACTOR = 1.0;
     private static final Map<String, Map<String, Double>> calibrationFactors = new HashMap<>();
+    private static final Set<String> warnedScenarios = new HashSet<>();
 
     static {
         // Initialize scenarios
@@ -85,8 +93,36 @@ public class CalibrationFactors {
         }
     }
 
-    // Method to get calibration factor by scenario and mode
+    /**
+     * Returns the injury calibration factor for a scenario and mode. A scenario without estimated factors
+     * gets {@value #UNCALIBRATED_FACTOR} for every mode, with a warning logged once per scenario.
+     *
+     * @throws IllegalArgumentException if a known scenario has no factor for the mode
+     */
     public double getCalibrationFactor(String scenario, String mode) {
-        return calibrationFactors.getOrDefault(scenario, new HashMap<>()).getOrDefault(mode, 0.0);
+        Map<String, Double> modeFactors = calibrationFactors.get(scenario);
+        if (modeFactors == null) {
+            warnUncalibrated(scenario);
+            return UNCALIBRATED_FACTOR;
+        }
+        Double factor = modeFactors.get(mode);
+        if (factor == null) {
+            throw new IllegalArgumentException("No injury calibration factor for mode '" + mode
+                    + "' in scenario '" + scenario + "'. Known modes: " + modeFactors.keySet());
+        }
+        return factor;
+    }
+
+    private static synchronized void warnUncalibrated(String scenario) {
+        if (warnedScenarios.add(scenario)) {
+            String line = "*".repeat(100);
+            logger.warn(line);
+            logger.warn("*** NEW SCENARIO '" + scenario + "': NO INJURY CALIBRATION FACTORS ESTIMATED");
+            logger.warn("*** Known scenarios: " + calibrationFactors.keySet());
+            logger.warn("*** Using calibration factor " + UNCALIBRATED_FACTOR + " for all modes (Car, Bike, Walk).");
+            logger.warn("*** Injury and fatality numbers are UNCALIBRATED. Estimate calibration factors for this");
+            logger.warn("*** scenario and add them to CalibrationFactors before using the results.");
+            logger.warn(line);
+        }
     }
 }

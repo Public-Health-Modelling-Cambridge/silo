@@ -29,9 +29,11 @@ public class AccidentModelMCR extends AbstractModel implements ModelUpdateListen
     private int latestMatsimYear = -1;
     private static final Logger logger = LogManager.getLogger(AccidentModelMCR.class);
     private List<Day> simulatedDays;
+    private final Config matsimConfig;
 
-    public AccidentModelMCR(DataContainer dataContainer, Properties properties, Random random) {
+    public AccidentModelMCR(DataContainer dataContainer, Properties properties, Random random, Config matsimConfig) {
         super(dataContainer, properties, random);
+        this.matsimConfig = Objects.requireNonNull(matsimConfig, "MATSim config is required: the accident model reads the same network as linkInfoByDay");
         //simulatedDays = Arrays.asList(Day.sunday);
         simulatedDays = Arrays.asList(Day.sunday, Day.saturday, Day.thursday);
     }
@@ -79,6 +81,12 @@ public class AccidentModelMCR extends AbstractModel implements ModelUpdateListen
     public void endSimulation() {
     }
 
+    // Runs the accident model for the given MATSim year regardless of the endYear() trigger conditions (offline runs)
+    public void runForYear(int year) {
+        latestMatsimYear = year;
+        runAccidentRateModel(year);
+    }
+
     private void runAccidentRateModel(int year) {
         //generate link injury risks for each simulated day
         for (Day day : simulatedDays) {
@@ -94,8 +102,21 @@ public class AccidentModelMCR extends AbstractModel implements ModelUpdateListen
             final MutableScenario scenario = ScenarioUtils.createMutableScenario(config);
             scenario.getConfig().travelTimeCalculator().setTraveltimeBinSize(3600);
 
-            // float scalingFactor = (float) (properties.main.scaleFactor * properties.transportModel.matsimScaleFactor);
-            float scalingFactor = 0.1f; // todo: temporary fix
+            // Car/truck sample of the simulated MATSim population. MATSim capacity is set from
+            // matsim.scale.factor.car (MatsimTransportModelMCRHealth.finalizeCarTruckConfig), so both must agree.
+            double matsimScaleFactor = properties.transportModel.matsimScaleFactor;
+            double matsimScaleFactorCar = properties.healthData.matsim_scale_factor_car;
+            if (Math.abs(matsimScaleFactor - matsimScaleFactorCar) > 1e-9) {
+                throw new IllegalStateException("matsim.scale.factor (" + matsimScaleFactor
+                        + ") differs from matsim.scale.factor.car (" + matsimScaleFactorCar
+                        + "); set both to the car/truck sample of the MATSim run");
+            }
+            double carTruckSample = properties.main.scaleFactor * matsimScaleFactor;
+            if (!(carTruckSample > 0. && carTruckSample <= 1.)) {
+                throw new IllegalStateException("Invalid car/truck sample (scale.factor x matsim.scale.factor): " + carTruckSample);
+            }
+            float vehicleScaleFactor = (float) (1. / carTruckSample);
+            logger.info("Accident model: car/truck sample " + carTruckSample + ", flows expanded by " + vehicleScaleFactor);
             scenario.addScenarioElement("accidentModelFile", properties.main.baseDirectory + "input/accident/");
             //System.out.println(scenario.getScenarioElement("accidentModelFile").toString());
             //System.exit(0);
@@ -107,13 +128,24 @@ public class AccidentModelMCR extends AbstractModel implements ModelUpdateListen
             // model.computePersonLevelInjuryRiskOffline();
 
             // osm-based injury model (new version)
-            AccidentRateModelOsmMCR model = new AccidentRateModelOsmMCR(properties, scenario, 1.f / scalingFactor, day, random);
+            // Use the same network as linkInfoByDay (DataBuilderHealth) and the exposure model
+            Map<Id<Link>, LinkInfo> dayLinkInfo = ((HealthDataContainerImpl) dataContainer).getLinkInfoByDay(day);
+            if (dayLinkInfo == null) {
+                throw new IllegalStateException("No linkInfoByDay initialised for day " + day);
+            }
+            AccidentRateModelOsmMCR model = new AccidentRateModelOsmMCR(properties, scenario, vehicleScaleFactor, day, random,
+                    matsimConfig.network().getInputFile(), dayLinkInfo.keySet());
             model.runCasualtyRateMCR();
 
             for (Id<Link> linkId : model.getAccidentsContext().getLinkId2info().keySet()) {
                 //((de.tum.bgu.msm.scenarios.health.HealthDataContainerImpl)dataContainer).getLinkInfoByDay().get(day).get(linkId).setLightCasualityExposureByAccidentTypeByTime(model.getAccidentsContext().getLinkId2info().get(linkId).getLightCasualityExposureByAccidentTypeByTime());
                 //((DataContainerHealth) dataContainer).getLinkInfo().get(linkId).setSevereFatalCasualityExposureByAccidentTypeByTime(model.getAccidentsContext().getLinkId2info().get(linkId).getSevereFatalCasualityExposureByAccidentTypeByTime());
-                ((HealthDataContainerImpl) dataContainer).getLinkInfoByDay(day).get(linkId).setSevereFatalCasualityExposureByAccidentTypeByTime(model.getAccidentsContext().getLinkId2info().get(linkId).getSevereFatalCasualityExposureByAccidentTypeByTime());
+                LinkInfo linkInfo = dayLinkInfo.get(linkId);
+                if (linkInfo == null) {
+                    throw new IllegalStateException("Accident model produced a risk for link " + linkId +
+                            " which is not in linkInfoByDay(" + day + "): the accident and health networks differ.");
+                }
+                linkInfo.setSevereFatalCasualityExposureByAccidentTypeByTime(model.getAccidentsContext().getLinkId2info().get(linkId).getSevereFatalCasualityExposureByAccidentTypeByTime());
             }
 
             logger.info("====================");
