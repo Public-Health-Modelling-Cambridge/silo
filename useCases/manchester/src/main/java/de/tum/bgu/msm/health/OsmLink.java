@@ -101,14 +101,15 @@ public class OsmLink {
 
         this.lengthSum = edges.stream().mapToDouble(Link::getLength).sum();
 
-        Map<Double, Long> widthFreq = networkLinks.stream()
-                .map(l -> getDoubleAttribute(l, "width", 0.0))
-                .filter(w -> w != 0.0)
-                .collect(Collectors.groupingBy(w -> w, Collectors.counting()));
-        this.width = widthFreq.entrySet().stream()
-                .max(Map.Entry.comparingByValue())
-                .map(Map.Entry::getKey)
-                .orElse(0.0);
+        // width (0 = missing) as length-weighted mode like the attributes above, but not counted in mixedAttributes:
+        // the edges of one street often differ slightly in width
+        boolean mixed = this.mixedAttributes;
+        Double streetWidth = lengthWeightedMode(edges, l -> {
+            double w = getDoubleAttribute(l, "width", 0.0);
+            return w == 0.0 ? null : w;
+        });
+        this.mixedAttributes = mixed;
+        this.width = streetWidth != null ? streetWidth : 0.0;
 
         double weightedSum = 0.0;
         double totalWeight = 0.0;
