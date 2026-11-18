@@ -22,14 +22,21 @@ public class NoiseMetrics {
         return Math.pow(10, noiseRp / 10);
     }
 
+    // lower limits of the exposure-response curves: the quadratic curves rise again below their minimum (HA: Lden 45.6 dB,
+    // HSD: Lnight 37 dB) and were not fitted for these levels, so the curve is held flat at its value at the limit
+    private static final double MIN_LDEN_HIGH_ANNOYED = 45.;
+    private static final double MIN_LNIGHT_HIGH_SLEEP_DISTURBANCE = 40.;
+
     public static double getHighAnnoyedPercentage(float Lden) {
         //noise %HA high annoyed (Guski et al., 2017)
-        return (78.9270 - 3.1162 * Lden + 0.0342 * Lden * Lden);
+        double level = Math.max(Lden, MIN_LDEN_HIGH_ANNOYED);
+        return (78.9270 - 3.1162 * level + 0.0342 * level * level);
     }
 
     public static double getHighSleepDisturbancePercentage(float Lnight) {
 
         //%HSD high sleep disturbance (Basner & McGuire, 2018)
-        return (19.4312 - 0.9336 * Lnight + 0.0126 * Lnight * Lnight);
+        double level = Math.max(Lnight, MIN_LNIGHT_HIGH_SLEEP_DISTURBANCE);
+        return (19.4312 - 0.9336 * level + 0.0126 * level * level);
     }
 }
