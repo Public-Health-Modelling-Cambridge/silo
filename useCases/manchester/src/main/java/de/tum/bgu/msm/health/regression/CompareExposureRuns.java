@@ -35,6 +35,9 @@ public class CompareExposureRuns {
     private final Path newDir;
     private final Map<String, Double> background = new HashMap<>();
     private final StringBuilder report = new StringBuilder();
+    private Map<String, Double> normalisationK = new HashMap<>();
+    // mean ventilation rate of a person at home all week (m3/h): 16 h at 0.61 x 0.672 + 1.125 x 0.328, 8 h at 0.27
+    private static final double HOME_WEEK_VENTILATION = (16 * (0.61 * (1 - 0.328) + 1.125 * 0.328) + 8 * 0.27) / 24;
 
     public static void main(String[] args) throws IOException {
         if (args.length != 2 && args.length != 4) {
@@ -68,6 +71,7 @@ public class CompareExposureRuns {
         } else {
             Table baseline = Table.read(baselinePersons, "id");
             Table current = Table.read(newPersons, "id");
+            normalisationK = readNormalisationK(newDir);
             report.append("== Persons (").append(newPersons.getFileName()).append(") ==\n");
             compareTables(baseline, current);
             checkNewRun(current);
@@ -275,7 +279,15 @@ public class CompareExposureRuns {
         for (String pollutant : POLLUTANTS) {
             String totalColumn = "exposure_normalised_" + pollutant;
             if (!current.columns.contains(totalColumn)) continue;
+            String homeConcentrationColumn = "exposure_home_concentration_" + pollutant;
+            boolean hasHomeConcentration = current.columns.contains(homeConcentrationColumn);
             int belowBackground = 0, decompositionMismatch = 0, notAvailable = 0;
+            // population means over persons with a home benchmark: normalised exposure vs. home concentration
+            double sumTotal = 0, sumHome = 0;
+            int withHome = 0;
+            // persons at home all week (no travel or activity exposure): normalised exposure / home concentration
+            double sumRatioHomeOnly = 0;
+            int homeOnly = 0;
             for (String id : current.rows.keySet()) {
                 Double total = parse(current.get(id, totalColumn));
                 if (total == null) {
@@ -284,6 +296,18 @@ public class CompareExposureRuns {
                 }
                 if (background.containsKey(pollutant) && total < background.get(pollutant) - TOLERANCE) {
                     belowBackground++;
+                }
+                Double home = hasHomeConcentration ? parse(current.get(id, homeConcentrationColumn)) : null;
+                if (home != null && home > 0) {
+                    sumTotal += total;
+                    sumHome += home;
+                    withHome++;
+                    Double travel = parse(current.get(id, totalColumn + "_travel"));
+                    Double activity = parse(current.get(id, totalColumn + "_activity"));
+                    if (travel != null && activity != null && travel == 0 && activity == 0) {
+                        sumRatioHomeOnly += total / home;
+                        homeOnly++;
+                    }
                 }
                 double sum = 0;
                 boolean complete = true;
@@ -297,10 +321,39 @@ public class CompareExposureRuns {
                     decompositionMismatch++;
                 }
             }
-            report.append(String.format("   %-5s below background (%s): %d | travel+activity+home != total: %d | NA: %d%n", pollutant,
+            // below background is not an error: lower ventilation or a cleaner home location give legitimately lower values
+            report.append(String.format("   %-5s below background (%s, information only): %d | travel+activity+home != total: %d | NA: %d%n", pollutant,
                     background.containsKey(pollutant) ? String.valueOf(background.get(pollutant)) : "background not given",
                     belowBackground, decompositionMismatch, notAvailable));
+            if (withHome > 0) {
+                Double k = normalisationK.get(pollutant);
+                report.append(String.format("   %-5s K = %s | mean normalised = %.4f, mean home concentration = %.4f (%d persons)%n",
+                        pollutant, k == null ? "not found" : String.format("%.6f", k), sumTotal / withHome, sumHome / withHome, withHome));
+                if (homeOnly > 0) {
+                    // at home all week, the normalised exposure is K x the mean home ventilation rate x the home
+                    // concentration; with a constant concentration: (16 x 0.779 + 8 x 0.27) / 24 = 0.609 m3/h
+                    report.append(String.format("   %-5s at home all week: normalised / home concentration = %.4f (%d persons), K x 0.609 = %s%n",
+                            pollutant, sumRatioHomeOnly / homeOnly, homeOnly, k == null ? "-" : String.format("%.4f", k * HOME_WEEK_VENTILATION)));
+                }
+            }
         }
+    }
+
+    // normalisation factor K by pollutant label (pm25, no2), from airPollutionNormalisationK.csv of the new run
+    private Map<String, Double> readNormalisationK(Path dir) throws IOException {
+        Map<String, Double> k = new HashMap<>();
+        Path file = findFile(dir, "airPollutionNormalisationK");
+        if (file == null) {
+            return k;
+        }
+        List<String> lines = Files.readAllLines(file);
+        List<String> header = Arrays.asList(lines.get(0).split(","));
+        int posPollutant = header.indexOf("pollutant"), posK = header.indexOf("k");
+        for (String line : lines.subList(1, lines.size())) {
+            String[] values = line.split(",");
+            k.put(values[posPollutant].replace(".", ""), Double.parseDouble(values[posK]));
+        }
+        return k;
     }
 
     private void reportLargestChanges(Table baseline, Table current) {

@@ -44,6 +44,9 @@ public class HealthModelProperties {
     public final String ptBusTimeShareMatrix;
     public final double DEFAULT_ROAD_TRAFFIC_INCREMENTAL_PM25;
     public final double DEFAULT_ROAD_TRAFFIC_INCREMENTAL_NO2;
+    // air pollution normalisation factor K by pollutant, taken from the reference run; null: computed in this run
+    public final Double airNormalisationKPm25;
+    public final Double airNormalisationKNo2;
     public String healthSurveyData;
 
 
@@ -75,6 +78,9 @@ public class HealthModelProperties {
         //Bury Whitefield Roadside is defined as reference urban traffic site, annual average NO2 is 25.1 at this site
         // reference road traffic incremental NO2 = 25.1 - 17.3
         DEFAULT_ROAD_TRAFFIC_INCREMENTAL_NO2 = PropertiesUtil.getDoubleProperty(bundle, "road.traffic.incremental.no2", 7.8);
+
+        airNormalisationKPm25 = getOptionalDouble(bundle, "air.normalisation.k.pm25");
+        airNormalisationKNo2 = getOptionalDouble(bundle, "air.normalisation.k.no2");
 
         basePath = PropertiesUtil.getStringProperty(bundle, "healthData.basePath", "input/health/");
 
@@ -117,6 +123,11 @@ public class HealthModelProperties {
         ptEgressTimeMatrix = PropertiesUtil.getStringProperty(bundle, "pt.egress.time.matrix.time", "egressTime");
 
         ptBusTimeShareMatrix = PropertiesUtil.getStringProperty(bundle, "pt.bus.time.share.matrix.time", "busTimeShare");
+    }
+
+    private static Double getOptionalDouble(ResourceBundle bundle, String key) {
+        String value = PropertiesUtil.getStringProperty(bundle, key, "");
+        return value == null || value.trim().isEmpty() ? null : Double.parseDouble(value.trim());
     }
 
 }

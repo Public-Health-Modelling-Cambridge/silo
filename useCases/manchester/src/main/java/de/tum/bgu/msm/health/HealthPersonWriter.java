@@ -103,6 +103,10 @@ public class HealthPersonWriter implements PersonWriter {
                 pwp.print(",exposure_avg_" + getPollutantLabel(pollutant) + "_" + source);
             }
         }
+        // home benchmark of the normalisation: concentration at home over all hours of the week, ventilation = 1
+        for (String pollutant : EXPOSURE_POLLUTANTS) {
+            pwp.print(",exposure_home_concentration_" + getPollutantLabel(pollutant));
+        }
         pwp.println();
 
         for (Person pp : householdData.getPersons()) {
@@ -180,6 +184,10 @@ public class HealthPersonWriter implements PersonWriter {
                     pwp.print(",");
                     pwp.print(formatExposure(((PersonHealthMCR) pp).getWeeklyExposureBySourceAverage(source, pollutant)));
                 }
+            }
+            for (String pollutant : EXPOSURE_POLLUTANTS) {
+                pwp.print(",");
+                pwp.print(formatExposure(((PersonHealthMCR) pp).getWeeklyHomeConcentration(pollutant)));
             }
             pwp.println();
             if (pp.getId() == SiloUtil.trackPp) {

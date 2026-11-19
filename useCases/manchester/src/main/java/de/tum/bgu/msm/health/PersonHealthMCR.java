@@ -45,6 +45,10 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     // key: source + "_" + pollutant, e.g. "travel_pm2.5"
     private Map<String, Float> weeklyExposureBySourceNormalised = new HashMap<>();
     private Map<String, Float> weeklyExposureBySourceAverage = new HashMap<>();
+    // home benchmark for the air pollution normalisation: concentration at the home location in every hour of the
+    // week (also when the person is away), with ventilation = 1
+    private Map<String, Double> weeklyHomeConcentrationSum = new HashMap<>();
+    private float weeklyHomeConcentrationHours = 0.f;
 
     private float[] weeklyNoiseExposureByHour = new float[24*7];
     private float weeklyNoiseExposureNormalised;
@@ -433,6 +437,19 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
         return weeklyExposureBySourceAverage.get(source + "_" + pollutant);
     }
 
+    public synchronized void updateWeeklyHomeConcentration(Map<String, Double> concentrationSum, float hours) {
+        concentrationSum.forEach((pollutant, sum) -> weeklyHomeConcentrationSum.merge(pollutant, sum, Double::sum));
+        weeklyHomeConcentrationHours += hours;
+    }
+
+    // mean concentration at home over the hours with location data, NaN if the home has no receiver point
+    public float getWeeklyHomeConcentration(String pollutant) {
+        if (weeklyHomeConcentrationHours <= 0.f) {
+            return Float.NaN;
+        }
+        return (float) (weeklyHomeConcentrationSum.getOrDefault(pollutant, 0.) / weeklyHomeConcentrationHours);
+    }
+
     @Override
     public EnumMap<HealthExposures, EnumMap<Diseases, Float>> getRelativeRisksByDisease() {
         return relativeRisksByDisease;
@@ -465,6 +482,8 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
         Arrays.fill(weeklyActivityHourOccupied,0.f);
         weeklyExposureBySourceNormalised.clear();
         weeklyExposureBySourceAverage.clear();
+        weeklyHomeConcentrationSum.clear();
+        weeklyHomeConcentrationHours = 0.f;
         Arrays.fill(weeklyNoiseExposureByHour,0.f);
         weeklyNdviExposure = 0.f;
         Arrays.fill(weeklyTravelActivityHourOccupied,0.f);
