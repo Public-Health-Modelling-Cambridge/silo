@@ -56,7 +56,13 @@ public class DeathStrategyMCR implements DeathStrategy {
         //calculation of probabilities for mortality with first adjustment using rates*rr exposures/PA and then
         // adjusting probabilities (previous rate converted to probability) to odds ratios and multiplied by teh
         // disease rr and back to prob. I understand this was not done this way before.
-        // exposure relative risks apply to mortality at all ages
+        // under 18, the death probability is based on the transition rate only: no exposure relative risks and no
+        // multimorbidity or injury multipliers
+        if(personAge < 18){
+            return (1 - Math.exp(-alpha));
+        }
+
+        // from age 18, exposure relative risks apply to mortality
         if(adjustByRelativeRisk){
             for(HealthExposures healthExposures : ((PersonHealth)person).getRelativeRisksByDisease().keySet()){
                 alpha *= ((PersonHealth)person).getRelativeRisksByDisease().get(healthExposures).get(Diseases.all_cause_mortality);
@@ -95,7 +101,6 @@ public class DeathStrategyMCR implements DeathStrategy {
             }
         }
 
-        // todo: what happens with people < 18
         if (!Collections.disjoint(currentDiseases, injuries)) {
             if (person.getGender().equals(Gender.MALE)) {
                 alpha *= 1.71;
