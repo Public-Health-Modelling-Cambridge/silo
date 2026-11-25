@@ -29,7 +29,7 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
     private float[] weeklyHourOccupiedByTransit = new float[24*7];
 
     //for exposure model
-    private Map<Mode, Float> weeklyMarginalMetHours = new HashMap<>();
+    private Map<Mode, Double> weeklyMarginalMetHours = new HashMap<>();
     private float weeklyMarginalMetHoursSport = 0.f;
     private Map<String, Double> weeklyAccidentRisks = new HashMap<>();
     private Map<String, float[]> weeklyExposureByPollutantByHour = new HashMap<>();
@@ -262,12 +262,12 @@ public class PersonHealthMCR implements PersonWithSchool, PersonHealth {
 
     @Override
     public float getWeeklyMarginalMetHours(Mode mode) {
-        return weeklyMarginalMetHours.getOrDefault(mode, 0.f);
+        return weeklyMarginalMetHours.getOrDefault(mode, 0.0).floatValue();
     }
 
     @Override
     public synchronized void updateWeeklyMarginalMetHours(Mode mode, float mmetHours) {
-        weeklyMarginalMetHours.put(mode, weeklyMarginalMetHours.getOrDefault(mode, 0.f) + mmetHours);
+        weeklyMarginalMetHours.put(mode, weeklyMarginalMetHours.getOrDefault(mode, 0.0) + mmetHours);
     }
 
     @Override
